@@ -59,4 +59,16 @@ for(const mode of ['target','battlefield','invaders','royale']){
   assert.ok(ev('sim.lastSummary.length')>5,`${mode}: missing round summary`);
 }
 
+// Mobile Safari / branch-Pages invariants: never accidentally disable the gestures
+// that make the wide arena usable on a phone.
+const html=fs.readFileSync('index.html','utf8');
+const css=fs.readFileSync('style.css','utf8');
+assert.ok(/minimum-scale=0\.5/.test(html),'viewport must allow zooming out on phones');
+assert.ok(/maximum-scale=5/.test(html),'viewport should retain useful zoom-in range');
+assert.ok(/user-scalable=yes/.test(html),'pinch zoom must remain explicitly enabled');
+assert.ok(/canvas[^}]*touch-action:auto/s.test(css),'canvas must preserve native scrolling and pinch gestures');
+assert.ok(/body\.running \.arenaPanel/.test(css),'running mobile layout should move the arena ahead of setup controls');
+assert.ok(/\.mobileHint \{ display:none/.test(css)&&/@media \(max-width:850px\)[\s\S]*\.mobileHint \{ display:block/.test(css),'phone-use hint should only appear on mobile layouts');
+assert.ok(fs.existsSync('.nojekyll'),'branch-based Pages should serve the repository as plain static files');
+
 console.log('BattlEvo smoke test passed.');
