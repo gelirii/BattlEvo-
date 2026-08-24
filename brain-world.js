@@ -38,19 +38,23 @@ function buildInputs(a){
     else sectors[s][ch]=Math.max(sectors[s][ch],near);
   };
   if(sim.mode==='royale') for(const o of sim.agents){ if(o===a||!o.alive)continue; add(o,o.species.id===a.species.id?1:0); }
-  for(const p of sim.projectiles){ if(p.owner===a||p.dead)continue; const hostile=p.team!==a.species.id; if(hostile)add(p,2,1,p.vx,p.vy); }
+  for(const p of sim.projectiles){ if(p.owner===a||p.dead)continue; const hostile=sim.mode==='royale' ? p.team!==a.species.id : p.team==='invader'; if(hostile)add(p,2,1,p.vx,p.vy); }
   for(const p of sim.arrows){ if(!p.dead)add(p,2,1,p.vx,p.vy); }
   for(const b of sim.bunkers) add({x:b.x+b.w/2,y:b.y+b.h/2},5);
   if(sim.mode==='target') for(const t of sim.targets) add(t,6);
   if(sim.mode==='invaders') for(const n of sim.invaders){if(n.alive)add(n,6);}
   for(const s of sectors)for(const v of s)input[k++]=v;
 
-  // Remembered bunker layout: nearest two remembered bunkers, world-relative even if now behind.
-  const mem=[...a.memory.values()].sort((x,y)=>dist2(a,x)-dist2(a,y)).slice(0,2);
-  for(let i=0;i<2;i++){
-    const m=mem[i]; if(m){ input[k++]=(m.x-a.x)/W; input[k++]=(m.y-a.y)/H; input[k++]=clamp(1-Math.hypot(m.x-a.x,m.y-a.y)/800,0,1); }
-    else {input[k++]=0;input[k++]=0;input[k++]=0;}
+  // Remembered bunker layout: a full 360° memory ring around the agent.
+  // Bunkers only enter this map after they have actually appeared in the forward 180° field.
+  const memSectors=new Float32Array(8);
+  for(const m of a.memory.values()){
+    const dx=m.x-a.x,dy=m.y-a.y,d=Math.hypot(dx,dy);
+    const rel=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x));
+    const sector=(Math.round(rel/(Math.PI/4))+8)%8;
+    memSectors[sector]=Math.max(memSectors[sector],clamp(1-d/800,0,1));
   }
+  for(const v of memSectors)input[k++]=v;
   // Remaining generic state.
   input[k++]=a.x/W*2-1; input[k++]=a.y/H*2-1; input[k++]=Math.sin(sim.tick*.025); input[k++]=Math.cos(sim.tick*.025);
   while(k<INPUTS) input[k++]=0;
