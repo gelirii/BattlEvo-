@@ -70,11 +70,28 @@ function orientedRect(x,y,w,h,o,id){
 }
 function orientedFacing(baseDir,o){ return (baseDir+o*2)%8; }
 
+function genomeLayout(hidden){
+  const hiddenBiasBase=INPUTS*hidden;
+  const outputWeightBase=hiddenBiasBase+hidden;
+  const outputBiasBase=outputWeightBase+hidden*OUTPUTS;
+  return{hiddenBiasBase,outputWeightBase,outputBiasBase,count:outputBiasBase+OUTPUTS};
+}
+function geneStd(hidden,index){
+  const l=genomeLayout(hidden);
+  if(index<l.hiddenBiasBase)return Math.sqrt(2/(INPUTS+hidden));
+  if(index<l.outputWeightBase)return 0.08;
+  if(index<l.outputBiasBase)return Math.sqrt(2/(hidden+OUTPUTS));
+  return 0.08;
+}
+function randomGene(hidden,index){return gaussian()*geneStd(hidden,index);}
+
 class Brain {
   constructor(hidden, genome=null){
     this.hidden=hidden;
-    const count = INPUTS*hidden + hidden + hidden*OUTPUTS + OUTPUTS;
-    this.g = genome ? Float32Array.from(genome) : Float32Array.from({length:count},()=>gaussian()*0.45);
+    const count=genomeLayout(hidden).count;
+    // Layer-aware Xavier-style scaling keeps random activation/output magnitudes
+    // comparable across brain sizes instead of making larger hidden layers louder.
+    this.g=genome?Float32Array.from(genome):Float32Array.from({length:count},(_,i)=>randomGene(hidden,i));
   }
   run(input){
     const h=new Float32Array(this.hidden); let k=0;
@@ -92,31 +109,28 @@ class Brain {
   }
   clone(){ return new Brain(this.hidden,this.g); }
   static child(a,b){
-    const hidden=a.hidden,g=new Float32Array(a.g.length);
-    const hiddenBiasBase=INPUTS*hidden;
-    const outputWeightBase=hiddenBiasBase+hidden;
-    const outputBiasBase=outputWeightBase+hidden*OUTPUTS;
+    const hidden=a.hidden,g=new Float32Array(a.g.length),l=genomeLayout(hidden);
 
     // Crossover whole hidden units rather than shredding each neuron's incoming and
     // outgoing weights independently. This preserves useful evolved subcircuits better.
     for(let j=0;j<hidden;j++){
       const src=Math.random()<0.5?a:b;
       for(let i=0;i<INPUTS;i++)g[j*INPUTS+i]=src.g[j*INPUTS+i];
-      g[hiddenBiasBase+j]=src.g[hiddenBiasBase+j];
-      for(let o=0;o<OUTPUTS;o++)g[outputWeightBase+o*hidden+j]=src.g[outputWeightBase+o*hidden+j];
+      g[l.hiddenBiasBase+j]=src.g[l.hiddenBiasBase+j];
+      for(let o=0;o<OUTPUTS;o++)g[l.outputWeightBase+o*hidden+j]=src.g[l.outputWeightBase+o*hidden+j];
     }
-    for(let o=0;o<OUTPUTS;o++)g[outputBiasBase+o]=(Math.random()<0.5?a:b).g[outputBiasBase+o];
+    for(let o=0;o<OUTPUTS;o++)g[l.outputBiasBase+o]=(Math.random()<0.5?a:b).g[l.outputBiasBase+o];
 
     // Scale mutation sub-linearly with genome size so a larger brain explores more
     // parameters without being genetically scrambled simply for having more capacity.
-    const referenceGenes=INPUTS*4+4+4*OUTPUTS+OUTPUTS;
+    const referenceGenes=genomeLayout(4).count;
     const scale=Math.sqrt(referenceGenes/g.length);
     const mutationRate=Math.min(0.06,0.06*scale);
     const resetRate=Math.min(0.004,0.004*scale);
     for(let i=0;i<g.length;i++){
       let v=g[i];
-      if(Math.random()<mutationRate)v+=gaussian()*0.28;
-      if(Math.random()<resetRate)v=gaussian()*0.6;
+      if(Math.random()<mutationRate)v+=gaussian()*Math.max(0.06,geneStd(hidden,i)*0.8);
+      if(Math.random()<resetRate)v=randomGene(hidden,i);
       g[i]=clamp(v,-4,4);
     }
     return new Brain(hidden,g);
