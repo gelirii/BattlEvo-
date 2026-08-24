@@ -2,15 +2,20 @@ function stepTargets(){
   for(const t of sim.targets){
     // Semi-regular movement: straight/bouncing with a gentle periodic turn.
     if((sim.tick+t.id*17)%240===0){const nd=vecToDir(t.dx,t.dy);const turn=((t.id%2)?1:-1);const d=DIRS[(nd+turn+8)%8];t.dx=d.x;t.dy=d.y;}
+    const oldX=t.x,oldY=t.y;
     const len=Math.hypot(t.dx,t.dy)||1;t.x+=(t.dx/len)*t.speed;t.y+=(t.dy/len)*t.speed;
-    if(t.x<35||t.x>W-35){t.dx*=-1;t.x=clamp(t.x,35,W-35);}if(t.y<35||t.y>H-35){t.dy*=-1;t.y=clamp(t.y,35,H-35);}if(t.hitFlash>0)t.hitFlash--;
+    if(t.x<35||t.x>W-35){t.dx*=-1;t.x=clamp(t.x,35,W-35);}if(t.y<35||t.y>H-35){t.dy*=-1;t.y=clamp(t.y,35,H-35);}
+    // Targets can pass behind cover from the viewer's perspective, but they do not
+    // physically phase through bunkers. A simple reverse bounce keeps paths readable.
+    if(sim.bunkers.some(b=>rectCircleHit(b,t,t.r))){t.x=oldX;t.y=oldY;t.dx*=-1;t.dy*=-1;}
+    if(t.hitFlash>0)t.hitFlash--;
   }
 }
 
 function stepBattlefield(){
   const vertical=sim.orientation===0||sim.orientation===2;
-  // Arrow lanes are always perpendicular to the crossing direction.
-  // Every arrow uses exactly the same projectile speed as every other projectile.
+  // Arrow lanes are always perpendicular to the crossing direction. The lane counts
+  // scale with arena dimensions, so each route sees roughly the same hazard density.
   if(sim.tick%34===0){
     if(vertical){const y=65+randi(8)*67;const fromLeft=Math.random()<.5;sim.arrows.push({x:fromLeft?-10:W+10,y,vx:(fromLeft?1:-1)*PROJECTILE_SPEED,vy:0,r:3,dead:false});}
     else{const x=65+randi(13)*69;const fromTop=Math.random()<.5;sim.arrows.push({x,y:fromTop?-10:H+10,vx:0,vy:(fromTop?1:-1)*PROJECTILE_SPEED,r:3,dead:false});}
@@ -47,7 +52,13 @@ function stepInvaders(){
     else{n.vx=s.x*n.shuffle*AGENT_SPEED;n.vy=s.y*n.shuffle*AGENT_SPEED;}
     n.x+=n.vx;n.y+=n.vy;
     n.fireClock--;
-    if(n.fireClock<=0){n.fireClock=125+randi(120);sim.projectiles.push({x:n.x,y:n.y,vx:f.x*PROJECTILE_SPEED,vy:f.y*PROJECTILE_SPEED,owner:null,team:'invader',r:2.5,dead:false});}
+    // Only the front-most living alien in each column may fire. This is much closer
+    // to classic Invaders and keeps the bullet field challenging without becoming a wall.
+    const isFront=!alive.some(o=>o.col===n.col&&o.row>n.row);
+    if(isFront&&n.fireClock<=0){
+      n.fireClock=90+randi(120);
+      sim.projectiles.push({x:n.x,y:n.y,vx:f.x*PROJECTILE_SPEED,vy:f.y*PROJECTILE_SPEED,owner:null,team:'invader',r:2.5,dead:false});
+    }
   }
   // A breach is a genuine failure, so surviving while ignoring the invaders is not a winning strategy.
   for(const n of alive){
@@ -62,9 +73,26 @@ function stepInvaders(){
 function stepRoyale(){
   const aliveTeams=SPECIES.filter(s=>sim.agents.some(a=>a.alive&&a.species.id===s.id));
   if(aliveTeams.length<=1){
-    if(aliveTeams.length===1){sim.winner=aliveTeams[0].id;for(const a of sim.agents)if(a.species.id===sim.winner)a.fitness+=300;}
+    if(aliveTeams.length===1){
+      sim.winner=aliveTeams[0].id;
+      // Team success matters, but dead passengers no longer receive the same reward as
+      // surviving contributors. This keeps Battle Royale cooperative without breeding freeloaders.
+      for(const a of sim.agents)if(a.species.id===sim.winner){a.fitness+=120;if(a.alive)a.fitness+=180;}
+    }
     sim.tick=MAX_TICKS.royale;sim.endReason=aliveTeams.length?'team victory':'draw';
   }
+}
+
+function roundSummary(){
+  const tag=(s)=>s.id==='red'?'R':s.id==='green'?'G':'B';
+  if(sim.mode==='target')return `Gen ${sim.generation}: `+SPECIES.map(s=>`${tag(s)} ${sim.agents.filter(a=>a.species.id===s.id).reduce((n,a)=>n+a.hits,0)} hits`).join(' · ');
+  if(sim.mode==='battlefield')return `Gen ${sim.generation}: `+SPECIES.map(s=>`${tag(s)} ${sim.agents.filter(a=>a.species.id===s.id&&a.finished).length} crossed`).join(' · ');
+  if(sim.mode==='invaders'){
+    const reason=sim.endReason||'time';
+    return `Gen ${sim.generation} (${reason}): `+SPECIES.map(s=>`${tag(s)} ${sim.agents.filter(a=>a.species.id===s.id).reduce((n,a)=>n+a.kills,0)} kills`).join(' · ');
+  }
+  const result=sim.winner?`${sim.winner.toUpperCase()} wins`:'draw';
+  return `Gen ${sim.generation} (${result}): `+SPECIES.map(s=>`${tag(s)} ${sim.agents.filter(a=>a.species.id===s.id).reduce((n,a)=>n+a.kills,0)} kills`).join(' · ');
 }
 
 function step(){
@@ -85,12 +113,16 @@ function finishGeneration(){
     if(sim.mode==='target')a.fitness+=a.hits*8;
     if(sim.mode==='battlefield'&&!a.finished){const o=objectiveVector(a);a.fitness+=o.progress*110;}
     if(sim.mode==='invaders'&&a.alive)a.fitness+=35;
-    if(sim.mode==='royale'&&a.alive)a.fitness+=55;
+    // On a timed Royale draw, hiding alive is worth only a small bonus; damage and
+    // actually winning the team fight remain much stronger evolutionary signals.
+    if(sim.mode==='royale'&&a.alive)a.fitness+=10;
     sim.populations[a.species.id][a.idx].fitness=a.fitness;
   }
+  sim.lastSummary=roundSummary();
   for(const s of SPECIES){
     const pop=sim.populations[s.id];const best=Math.max(...pop.map(p=>p.fitness));sim.bestEver[s.id]=Math.max(sim.bestEver[s.id],best);
     sim.populations[s.id]=evolvePopulation(pop);
   }
   sim.generation++;setupGeneration();
+  if(typeof updateRoundResult==='function')updateRoundResult();
 }
