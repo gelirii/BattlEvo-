@@ -94,3 +94,10 @@ stepTargets=function(){
     if(t.hitFlash>0)t.hitFlash--;
   }
 };
+
+// ui.js is loaded first so its shared scenario-copy table exists; then this module can
+// describe the randomized curriculum without duplicating the rest of the UI code.
+if(typeof MODE_BRIEFS!=='undefined'){
+  MODE_BRIEFS.target='Random positions, random cover and semi-regular moving targets. Learn to find, track and lead worthwhile targets in any direction.';
+  if(typeof updateModeBrief==='function')updateModeBrief();
+}
