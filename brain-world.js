@@ -16,9 +16,34 @@ function inFront(agent, obj){
   return dot(dx,dy,f.x,f.y)>=0;
 }
 
+// Liang-Barsky segment/rectangle test. We only need centre-line occlusion: if the
+// line from an agent to an object's centre crosses a bunker, that object is hidden.
+function segmentIntersectsRect(x1,y1,x2,y2,r){
+  const dx=x2-x1,dy=y2-y1; let t0=0,t1=1;
+  const clip=(p,q)=>{
+    if(Math.abs(p)<1e-9)return q>=0;
+    const t=q/p;
+    if(p<0){if(t>t1)return false;if(t>t0)t0=t;}
+    else{if(t<t0)return false;if(t<t1)t1=t;}
+    return true;
+  };
+  return clip(-dx,x1-r.x)&&clip(dx,r.x+r.w-x1)&&clip(-dy,y1-r.y)&&clip(dy,r.y+r.h-y1);
+}
+
+function lineOfSight(agent,obj,ignoreBunkerId=null){
+  const dx=obj.x-agent.x,dy=obj.y-agent.y;
+  if(!inFront(agent,obj)||Math.hypot(dx,dy)>SIGHT_RANGE)return false;
+  for(const b of sim.bunkers){
+    if(b.id===ignoreBunkerId)continue;
+    if(segmentIntersectsRect(agent.x,agent.y,obj.x,obj.y,b))return false;
+  }
+  return true;
+}
+
 function rememberVisibleBunkers(agent){
   for(const b of sim.bunkers){
-    if(inFront(agent,{x:b.x+b.w/2,y:b.y+b.h/2})) agent.memory.set(b.id,{x:b.x+b.w/2,y:b.y+b.h/2,w:b.w,h:b.h,seen:sim.tick});
+    const centre={x:b.x+b.w/2,y:b.y+b.h/2};
+    if(lineOfSight(agent,centre,b.id))agent.memory.set(b.id,{x:centre.x,y:centre.y,w:b.w,h:b.h,seen:sim.tick});
   }
 }
 
@@ -29,18 +54,19 @@ function buildInputs(a){
   input[k++]=a.health; input[k++]=a.cooldown<=0?1:0; input[k++]=f.x; input[k++]=f.y; input[k++]=mv.x; input[k++]=mv.y;
   const obj=objectiveVector(a); input[k++]=obj.x; input[k++]=obj.y; input[k++]=obj.progress;
 
-  // Seven sectors cover the full 180-degree forward field.
-  // Each sector uses the same combat vocabulary in every mode:
+  // Seven sectors cover the full 180-degree forward field. The screen diagonal is
+  // the sight range, so anything in front can be sensed unless a bunker occludes it.
+  // Every mode speaks the same combat vocabulary so training can transfer:
   // hostile/target proximity + velocity, friendly proximity,
   // hostile projectile proximity + velocity, and visible bunker proximity.
-  // This is deliberate: Target Practice targets, Invaders aliens and
-  // Battle Royale enemies exercise the SAME hostile-tracking inputs.
   const sectors=Array.from({length:7},()=>new Float32Array(8));
-  const sectorOf=(o)=>{
-    const dx=o.x-a.x,dy=o.y-a.y; const d=Math.hypot(dx,dy); if(d<1)return null;
-    const ang=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x)); if(Math.abs(ang)>Math.PI/2)return null;
+  const sectorOf=(o,ignoreBunkerId=null)=>{
+    if(!lineOfSight(a,o,ignoreBunkerId))return null;
+    const dx=o.x-a.x,dy=o.y-a.y,d=Math.hypot(dx,dy);
+    if(d<1)return null;
+    const ang=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x));
     const s=clamp(Math.floor(((ang+Math.PI/2)/Math.PI)*7),0,6);
-    return{s,near:clamp(1-d/700,0,1)};
+    return{s,near:clamp(1-d/SIGHT_RANGE,0,1)};
   };
   const addEnemy=(o,vx=0,vy=0)=>{
     const q=sectorOf(o); if(!q)return; const sec=sectors[q.s];
@@ -51,13 +77,16 @@ function buildInputs(a){
     const q=sectorOf(o); if(!q)return; const sec=sectors[q.s];
     if(q.near>sec[4]){sec[4]=q.near;sec[5]=clamp(vx/PROJECTILE_SPEED,-1,1);sec[6]=clamp(vy/PROJECTILE_SPEED,-1,1);}
   };
-  const addBunker=(o)=>{const q=sectorOf(o);if(q)sectors[q.s][7]=Math.max(sectors[q.s][7],q.near);};
+  const addBunker=(b)=>{
+    const o={x:b.x+b.w/2,y:b.y+b.h/2}; const q=sectorOf(o,b.id);
+    if(q)sectors[q.s][7]=Math.max(sectors[q.s][7],q.near);
+  };
 
   if(sim.mode==='royale'){
     for(const o of sim.agents){
       if(o===a||!o.alive)continue;
-      if(o.species.id===a.species.id) addFriend(o);
-      else {
+      if(o.species.id===a.species.id)addFriend(o);
+      else{
         const d=o.moveDir>=0?DIRS[o.moveDir]:{x:0,y:0};
         addEnemy(o,d.x*AGENT_SPEED,d.y*AGENT_SPEED);
       }
@@ -69,20 +98,23 @@ function buildInputs(a){
     if(hostile)addProjectile(p,p.vx,p.vy);
   }
   for(const p of sim.arrows){if(!p.dead)addProjectile(p,p.vx,p.vy);}
-  for(const b of sim.bunkers)addBunker({x:b.x+b.w/2,y:b.y+b.h/2});
-  if(sim.mode==='target')for(const t of sim.targets)addEnemy(t,(t.dx||0)*t.speed,(t.dy||0)*t.speed);
+  for(const b of sim.bunkers)addBunker(b);
+  if(sim.mode==='target')for(const t of sim.targets){
+    const len=Math.hypot(t.dx||0,t.dy||0)||1;
+    addEnemy(t,((t.dx||0)/len)*t.speed,((t.dy||0)/len)*t.speed);
+  }
   if(sim.mode==='invaders')for(const n of sim.invaders){if(n.alive)addEnemy(n,n.vx||0,n.vy||0);}
   for(const s of sectors)for(const v of s)input[k++]=v;
 
   // Full 360-degree remembered terrain ring. A bunker only enters memory after
-  // it has actually appeared in the agent's forward field, but remains usable
-  // after the agent walks past or turns away from it.
+  // it has actually appeared in the forward field, but remains usable after the
+  // agent walks past it or turns away from it.
   const memSectors=new Float32Array(8);
   for(const m of a.memory.values()){
     const dx=m.x-a.x,dy=m.y-a.y,d=Math.hypot(dx,dy);
     const rel=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x));
     const sector=(Math.round(rel/(Math.PI/4))+8)%8;
-    memSectors[sector]=Math.max(memSectors[sector],clamp(1-d/800,0,1));
+    memSectors[sector]=Math.max(memSectors[sector],clamp(1-d/SIGHT_RANGE,0,1));
   }
   for(const v of memSectors)input[k++]=v;
 
@@ -124,14 +156,20 @@ function stepAgents(){
   for(const a of sim.agents){
     if(!a.alive)continue;
     a.lastX=a.x;a.lastY=a.y;
-    const wantsFire=chooseAction(a);tryMove(a);if(wantsFire)fire(a);
+    const wantsFire=chooseAction(a);tryMove(a);
+    // Battlefield Run is pure movement/threat training. Firing there previously
+    // created useless bullets and selected against the fire output for no gameplay reason.
+    if(wantsFire&&sim.mode!=='battlefield')fire(a);
     if(a.cooldown>0)a.cooldown--;if(a.flash>0)a.flash--;
     a.fitness+=0.002;
   }
 }
 
 function projectileBlocked(p){return sim.bunkers.some(b=>rectCircleHit(b,p,p.r));}
-function killAgent(a,by=null){if(!a.alive)return;a.alive=false;a.health=0;a.fitness-=25;if(by&&by.owner&&by.owner!==a){by.owner.fitness+=35;by.owner.kills++;}}
+function killAgent(a,by=null){
+  if(!a.alive)return;a.alive=false;a.health=0;a.deathTick=sim.tick;a.fitness-=25;
+  if(by&&by.owner&&by.owner!==a){by.owner.fitness+=35;by.owner.kills++;}
+}
 
 function stepProjectiles(){
   for(const p of sim.projectiles){
