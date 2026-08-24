@@ -1,6 +1,6 @@
 'use strict';
 
-// BattlEvo v0.2.0 — dependency-free neural evolution arcade.
+// BattlEvo v0.2.1 — dependency-free neural evolution arcade.
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
@@ -78,10 +78,13 @@ function genomeLayout(hidden){
 }
 function geneStd(hidden,index){
   const l=genomeLayout(hidden);
-  if(index<l.hiddenBiasBase)return Math.sqrt(2/(INPUTS+hidden));
-  if(index<l.outputWeightBase)return 0.08;
-  if(index<l.outputBiasBase)return Math.sqrt(2/(hidden+OUTPUTS));
-  return 0.08;
+  // BattlEvo compares networks with different hidden widths, so forward signal scale
+  // must not depend on width. Fan-in normalization keeps each hidden unit and each
+  // output at comparable variance whether the brain has 4, 20 or 64 hidden neurons.
+  if(index<l.hiddenBiasBase)return 1/Math.sqrt(INPUTS);
+  if(index<l.outputWeightBase)return 0.05;
+  if(index<l.outputBiasBase)return 1/Math.sqrt(hidden);
+  return 0.05;
 }
 function randomGene(hidden,index){return gaussian()*geneStd(hidden,index);}
 
@@ -89,8 +92,6 @@ class Brain {
   constructor(hidden, genome=null){
     this.hidden=hidden;
     const count=genomeLayout(hidden).count;
-    // Layer-aware Xavier-style scaling keeps random activation/output magnitudes
-    // comparable across brain sizes instead of making larger hidden layers louder.
     this.g=genome?Float32Array.from(genome):Float32Array.from({length:count},(_,i)=>randomGene(hidden,i));
   }
   run(input){
@@ -121,15 +122,16 @@ class Brain {
     }
     for(let o=0;o<OUTPUTS;o++)g[l.outputBiasBase+o]=(Math.random()<0.5?a:b).g[l.outputBiasBase+o];
 
-    // Scale mutation sub-linearly with genome size so a larger brain explores more
-    // parameters without being genetically scrambled simply for having more capacity.
+    // Scale mutation frequency sub-linearly with genome size, then scale perturbation
+    // size with the parameter's own initialization scale. Large brains therefore gain
+    // capacity without being mutated more violently simply because they contain more genes.
     const referenceGenes=genomeLayout(4).count;
     const scale=Math.sqrt(referenceGenes/g.length);
     const mutationRate=Math.min(0.06,0.06*scale);
     const resetRate=Math.min(0.004,0.004*scale);
     for(let i=0;i<g.length;i++){
       let v=g[i];
-      if(Math.random()<mutationRate)v+=gaussian()*Math.max(0.06,geneStd(hidden,i)*0.8);
+      if(Math.random()<mutationRate)v+=gaussian()*geneStd(hidden,i)*0.5;
       if(Math.random()<resetRate)v=randomGene(hidden,i);
       g[i]=clamp(v,-4,4);
     }
