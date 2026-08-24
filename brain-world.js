@@ -94,6 +94,10 @@ function buildInputs(a){
   }
   for(const p of sim.projectiles){
     if(p.owner===a||p.dead)continue;
+    // Invader fire is one visible logical projectile with an independent collision
+    // layer per species. Once it has hit Red, Red no longer senses that projectile,
+    // while Green and Blue still face the same trajectory.
+    if(sim.mode==='invaders'&&p.hitTeams?.[a.species.id])continue;
     const hostile=sim.mode==='royale'?p.team!==a.species.id:p.team==='invader';
     if(hostile)addProjectile(p,p.vx,p.vy);
   }
@@ -207,9 +211,12 @@ function stepProjectiles(){
       }
     }
     if(!p.owner&&sim.mode==='invaders'){
+      p.hitTeams=p.hitTeams||{};
       for(const a of sim.agents){
-        if(a.alive&&circleHit(p,a,p.r,AGENT_R)){p.dead=true;killAgent(a,p);break;}
+        if(!a.alive||p.hitTeams[a.species.id])continue;
+        if(circleHit(p,a,p.r,AGENT_R)){p.hitTeams[a.species.id]=true;killAgent(a,p);}
       }
+      if(SPECIES.every(s=>p.hitTeams[s.id]))p.dead=true;
     }
   }
   sim.projectiles=sim.projectiles.filter(p=>!p.dead);
