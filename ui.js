@@ -91,41 +91,48 @@ function draw(){
   for(const a of sim.agents)drawAgent(a);
 }
 
-function orientationLabel(){
-  if(!sim)return'—';
-  if(sim.mode==='target')return'Free arena';
-  if(sim.mode==='royale')return'Team arena';
-  if(sim.mode==='battlefield')return['CROSS UP ↑','CROSS RIGHT →','CROSS DOWN ↓','CROSS LEFT ←'][sim.orientation];
-  return['DEFEND BOTTOM ↓','DEFEND LEFT ←','DEFEND TOP ↑','DEFEND RIGHT →'][sim.orientation];
-}
 function updateModeBrief(){const el=document.getElementById('mode-brief');if(el)el.textContent=MODE_BRIEFS[sim?.mode||selectedMode];}
 function updateRoundResult(){const el=document.getElementById('round-result');if(el)el.textContent=sim?.lastSummary||'No completed rounds yet.';}
+function updateLifetimeBoard(){
+  const mode=sim?.mode||selectedMode;
+  const metrics={};
+  for(const s of SPECIES){
+    const m=lifetimeMetric(mode,s.id);metrics[s.id]=m;
+    document.getElementById('lifetime-label-'+s.id).textContent=m.label;
+    document.getElementById('lifetime-value-'+s.id).textContent=m.value;
+  }
+  const candidates=SPECIES.filter(s=>metrics[s.id].hasData);
+  const best=candidates.length?Math.max(...candidates.map(s=>metrics[s.id].score)):null;
+  for(const s of SPECIES){
+    const isLeader=best!==null&&metrics[s.id].hasData&&metrics[s.id].score===best;
+    document.getElementById('card-'+s.id)?.classList.toggle('leader',isLeader);
+  }
+}
 function updateHud(){
   document.getElementById('hud-mode').textContent=MODE_NAMES[sim?.mode||selectedMode];
   document.getElementById('hud-gen').textContent=sim?sim.generation:'0';
-  document.getElementById('hud-orient').textContent=orientationLabel();
-  updateModeBrief();updateRoundResult();
+  updateModeBrief();updateRoundResult();updateLifetimeBoard();
 }
 function updateStats(){
   if(!sim)return;
   document.getElementById('hud-time').textContent=(sim.tick/60).toFixed(1)+'s';
-  const scores={};
   for(const s of SPECIES){
-    const agents=sim.agents.filter(a=>a.species.id===s.id);scores[s.id]=Math.max(...agents.map(a=>a.fitness));
-    const active=agents.filter(a=>a.alive).length,modeBest=Number.isFinite(sim.bestEver[s.id])?sim.bestEver[s.id].toFixed(1):'—';
+    const agents=sim.agents.filter(a=>a.species.id===s.id);
+    const active=agents.filter(a=>a.alive).length;
     const neurons=sim.populations[s.id][0].brain.hidden;
+    const roundHits=agents.reduce((n,a)=>n+a.hits,0);
+    const roundKills=agents.reduce((n,a)=>n+a.kills,0);
     let line='';
-    if(sim.mode==='target')line=`${neurons}N · active ${active}/${POP_SIZE} · hits ${agents.reduce((n,a)=>n+a.hits,0)}`;
-    if(sim.mode==='battlefield')line=`${neurons}N · active ${active}/${POP_SIZE} · crossed ${agents.filter(a=>a.finished).length}`;
+    if(sim.mode==='target')line=`${neurons}N · active ${active}/${POP_SIZE} · this round ${roundHits} hits`;
+    if(sim.mode==='battlefield')line=`${neurons}N · active ${active}/${POP_SIZE} · this round ${agents.filter(a=>a.finished).length} crossed`;
     if(sim.mode==='invaders'){
       const remaining=sim.invaders.filter(n=>n.aliveFor?.[s.id]).length;
-      line=sim.invaderCleared[s.id]?`${neurons}N · WAVE CLEARED · kills ${agents.reduce((n,a)=>n+a.kills,0)}`:`${neurons}N · alive ${active}/${POP_SIZE} · invaders ${remaining}`;
+      line=sim.invaderCleared[s.id]?`${neurons}N · WAVE CLEARED · this round ${roundKills} kills`:`${neurons}N · alive ${active}/${POP_SIZE} · ${roundKills} kills · ${remaining} invaders`;
     }
-    if(sim.mode==='royale')line=`${neurons}N · alive ${active}/${POP_SIZE} · kills ${agents.reduce((n,a)=>n+a.kills,0)}`;
-    document.getElementById('stat-'+s.id).textContent=`${line} · best ${scores[s.id].toFixed(1)} · mode best ${modeBest}`;
+    if(sim.mode==='royale')line=`${neurons}N · alive ${active}/${POP_SIZE} · this round ${roundKills} kills`;
+    document.getElementById('stat-'+s.id).textContent=line;
   }
-  const leader=Math.max(...Object.values(scores));
-  for(const s of SPECIES)document.getElementById('card-'+s.id)?.classList.toggle('leader',Math.abs(scores[s.id]-leader)<1e-9);
+  updateLifetimeBoard();
 }
 function setRunningUI(on){
   document.body.classList.toggle('running',on);
@@ -148,15 +155,16 @@ requestAnimationFrame(loop);
 
 document.querySelectorAll('#modes button').forEach(b=>b.addEventListener('click',()=>{
   selectedMode=b.dataset.mode;document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('active',x===b));
-  if(sim){sim.mode=selectedMode;sim.bestEver={red:-Infinity,green:-Infinity,blue:-Infinity};sim.lastSummary=`Switched to ${MODE_NAMES[selectedMode]} — evolved brains retained at generation ${sim.generation}.`;setupGeneration();}
+  if(sim){sim.mode=selectedMode;sim.bestEver={red:-Infinity,green:-Infinity,blue:-Infinity};sim.lastSummary=`Switched to ${MODE_NAMES[selectedMode]} — evolved brains and lifetime records retained at generation ${sim.generation}.`;setupGeneration();}
   updateHud();
 }));
 document.querySelectorAll('.speedRow button').forEach(b=>b.addEventListener('click',()=>{speed=Number(b.dataset.speed);tickAccumulator=0;document.querySelectorAll('.speedRow button').forEach(x=>x.classList.toggle('active',x===b));}));
-document.getElementById('start').addEventListener('click',()=>{paused=false;tickAccumulator=0;document.getElementById('pause').textContent='Pause';initSimulation();});
+document.getElementById('start').addEventListener('click',()=>{paused=false;tickAccumulator=0;document.getElementById('pause').textContent='Pause';initSimulation();updateLifetimeBoard();});
 document.getElementById('pause').addEventListener('click',()=>{paused=!paused;tickAccumulator=0;document.getElementById('pause').textContent=paused?'Resume':'Pause';});
 document.getElementById('reset').addEventListener('click',()=>{
-  if(typeof window!=='undefined'&&typeof window.confirm==='function'&&!window.confirm('Reset all evolved Red, Green and Blue brains? This cannot be undone.'))return;
-  sim=null;paused=false;tickAccumulator=0;setRunningUI(false);document.getElementById('pause').textContent='Pause';document.getElementById('hud-gen').textContent='0';document.getElementById('hud-time').textContent='0.0s';document.getElementById('hud-orient').textContent='—';document.getElementById('round-result').textContent='No completed rounds yet.';
-  for(const s of SPECIES){document.getElementById('stat-'+s.id).textContent='Waiting to evolve.';document.getElementById('card-'+s.id)?.classList.remove('leader');}
+  if(typeof window!=='undefined'&&typeof window.confirm==='function'&&!window.confirm('Reset all evolved Red, Green and Blue brains and lifetime records? This cannot be undone.'))return;
+  sim=null;paused=false;tickAccumulator=0;setRunningUI(false);document.getElementById('pause').textContent='Pause';document.getElementById('hud-gen').textContent='0';document.getElementById('hud-time').textContent='0.0s';document.getElementById('round-result').textContent='No completed rounds yet.';
+  for(const s of SPECIES)document.getElementById('stat-'+s.id).textContent='Waiting to evolve.';
+  updateLifetimeBoard();
 });
 updateHud();
