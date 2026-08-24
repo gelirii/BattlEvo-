@@ -1,11 +1,9 @@
 name: BattlEvo evolution playtest
 
 on:
+  push:
+    branches: [audit/evolution-playtest]
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'tests/evolution-playtest.js'
-      - '.github/workflows/playtest.yml'
 
 jobs:
   playtest:
