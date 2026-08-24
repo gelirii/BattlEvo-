@@ -1,8 +1,7 @@
 name: BattlEvo evolution playtest
 
 on:
-  push:
-    branches: [audit/evolution-playtest]
+  pull_request:
   workflow_dispatch:
 
 jobs:
