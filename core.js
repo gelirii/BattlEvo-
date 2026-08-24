@@ -15,7 +15,7 @@ const POP_SIZE = 12;
 const AGENT_SPEED = 1.65;
 const PROJECTILE_SPEED = 4.6;
 const AGENT_R = 7;
-const INPUTS = 70;
+const INPUTS = 77;
 const OUTPUTS = 18; // 9 movement (stay + 8 dirs), 8 facing, 1 fire.
 const MAX_TICKS = {target:1800, battlefield:1500, invaders:1800, royale:2100};
 const MODE_NAMES = {target:'Target Practice', battlefield:'Battlefield Run', invaders:'Invaders', royale:'Battle Royale'};
@@ -171,7 +171,7 @@ function setupInvaders(){
     if(sim.orientation===2){x=230+c*85;y=H-80-r*48;}
     if(sim.orientation===1){x=W-80-r*48;y=140+c*52;}
     if(sim.orientation===3){x=80+r*48;y=140+c*52;}
-    sim.invaders.push({x,y,r:9,row:r,col:c,alive:true,shuffle:1,fireClock:randi(140),flash:0});
+    sim.invaders.push({x,y,r:9,row:r,col:c,alive:true,shuffle:1,fireClock:randi(140),flash:0,vx:0,vy:0});
   }
 }
 
