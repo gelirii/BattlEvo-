@@ -42,4 +42,4 @@ The same files are suitable for GitHub Pages.
 
 ## Current version
 
-**v0.1** — first playable evolutionary prototype.
+**v0.1.0** — first playable evolutionary prototype.
