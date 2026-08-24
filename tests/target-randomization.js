@@ -1,5 +1,6 @@
 'use strict';
 
+// PR verification copy: exercises the exact Target Practice randomization now on main.
 const fs=require('fs');
 const vm=require('vm');
 const assert=require('assert');
@@ -57,7 +58,6 @@ assert.ok(Math.max(...allAgentY)-Math.min(...allAgentY)>500,'creature y spawns r
 assert.ok(Math.max(...allTargetX)-Math.min(...allTargetX)>450,'target x spawns remain too constrained');
 assert.ok(Math.max(...allTargetY)-Math.min(...allTargetY)>450,'target y spawns remain too constrained');
 
-// Motion must remain stable after the randomized setup.
 for(let i=0;i<600;i++)ev('sim.tick++;stepTargets();');
 assert.ok(ev('sim.targets.every(t=>inArenaPoint(t))'),'moving target escaped the field');
 
