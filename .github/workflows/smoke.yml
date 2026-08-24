@@ -20,8 +20,11 @@ jobs:
           node --check modes.js
           node --check ui.js
           node --check tests/smoke.js
-      - name: Run gameplay audit
+          node --check tests/audit.js
+      - name: Run runtime smoke test
         run: node tests/smoke.js
+      - name: Run gameplay behaviour audit
+        run: node tests/audit.js
 
   ui-snapshot:
     runs-on: ubuntu-latest
@@ -31,13 +34,17 @@ jobs:
         run: |
           python3 -m http.server 8000 >/tmp/battlevo-server.log 2>&1 &
           sleep 1
-      - name: Capture desktop UI
+      - name: Capture desktop and phone UI
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           if [ -z "$CHROME" ]; then echo "Chrome/Chromium not present on runner"; exit 1; fi
-          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1000 --screenshot=battlevo-ui.png http://127.0.0.1:8000/
-          test -s battlevo-ui.png
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1000 --virtual-time-budget=1000 --screenshot=battlevo-desktop.png http://127.0.0.1:8000/
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,844 --virtual-time-budget=1000 --screenshot=battlevo-phone.png http://127.0.0.1:8000/
+          test -s battlevo-desktop.png
+          test -s battlevo-phone.png
       - uses: actions/upload-artifact@v4
         with:
           name: battlevo-ui
-          path: battlevo-ui.png
+          path: |
+            battlevo-desktop.png
+            battlevo-phone.png
