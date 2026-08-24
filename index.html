@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BattlEvo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+<header>
+  <div><h1>BattlEvo</h1><div class="sub">Three species. Same world. Different brain sizes.</div></div>
+  <div class="tiny">v0.1</div>
+</header>
+<div class="grid">
+  <aside class="panel controls">
+    <div class="speciesCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label>Hidden neurons</label><input id="brain-red" type="number" min="1" max="64" step="1" value="4"></div>
+    <div class="speciesCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label>Hidden neurons</label><input id="brain-green" type="number" min="1" max="64" step="1" value="10"></div>
+    <div class="speciesCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label>Hidden neurons</label><input id="brain-blue" type="number" min="1" max="64" step="1" value="20"></div>
+
+    <div>
+      <label>Training ground</label>
+      <div class="modes" id="modes">
+        <button data-mode="target" class="active">🎯 Target<br>Practice</button>
+        <button data-mode="battlefield">🏹 Battlefield<br>Run</button>
+        <button data-mode="invaders">👾 Invaders</button>
+        <button data-mode="royale">⚔️ Battle<br>Royale</button>
+      </div>
+    </div>
+
+    <button id="start" class="primary">START EVOLUTION</button>
+    <div class="buttonRow"><button id="pause" disabled>Pause</button><button id="reset" disabled>Reset</button></div>
+    <div><label>Simulation speed</label><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
+    <div class="tiny memoryNote">Agents see a 180° forward field. Bunkers leave a remembered map trace after being seen, even when they move behind the agent.</div>
+  </aside>
+
+  <main class="panel">
+    <div class="hud">
+      <div class="hudBox"><span>Mode</span><strong id="hud-mode">Target Practice</strong></div>
+      <div class="hudBox"><span>Generation</span><strong id="hud-gen">0</strong></div>
+      <div class="hudBox"><span>Orientation</span><strong id="hud-orient">—</strong></div>
+      <div class="hudBox"><span>Time</span><strong id="hud-time">0.0s</strong></div>
+      <div class="hudBox"><span>Population</span><strong>12 × 3</strong></div>
+    </div>
+    <canvas id="game" width="960" height="600"></canvas>
+    <div class="speciesStats">
+      <div class="statCard"><b>🔴 Red</b><div class="statLine" id="stat-red">Waiting to evolve.</div></div>
+      <div class="statCard"><b>🟢 Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div></div>
+      <div class="statCard"><b>🔵 Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div></div>
+    </div>
+    <div class="legend">Facing is the bright nose line; movement is independent. Pale triangles are agents, yellow marks are projectiles, tan blocks are bunkers. In Battle Royale, agents treat their own colour as friendly.</div>
+  </main>
+</div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
