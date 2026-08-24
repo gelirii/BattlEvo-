@@ -31,7 +31,7 @@
     <button id="start" class="primary">START EVOLUTION</button>
     <div class="buttonRow"><button id="pause" disabled>Pause</button><button id="reset" disabled>Reset</button></div>
     <div><label>Simulation speed</label><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
-    <div class="tiny memoryNote">Agents see a 180° forward field. Bunkers leave a remembered map trace after being seen, even when they move behind the agent.</div>
+    <div class="tiny memoryNote">Agents see a 180° forward field. Bunkers leave a remembered map trace after being seen, even when they move behind the agent. Once running, you can change training ground without resetting the evolved brains.</div>
   </aside>
 
   <main class="panel">
@@ -48,7 +48,7 @@
       <div class="statCard"><b>🟢 Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div></div>
       <div class="statCard"><b>🔵 Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div></div>
     </div>
-    <div class="legend">Facing is the bright nose line; movement is independent. Pale triangles are agents, yellow marks are projectiles, tan blocks are bunkers. In Battle Royale, agents treat their own colour as friendly.</div>
+    <div class="legend">Agents are coloured discs; the bright nose line shows facing while movement remains independent. Yellow marks are species projectiles, pale arrows are battlefield fire, purple shots belong to invaders, and tan blocks are bunkers. In Battle Royale, agents treat their own colour as friendly.</div>
   </main>
 </div>
 </div>
