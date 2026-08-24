@@ -1,29 +1,56 @@
 # BattlEvo
 
-BattlEvo is a dependency-free browser neural-evolution arcade. Three independently evolving species — **red, green and blue** — get the same senses, movement rules, projectile physics and evolutionary system. The main player-controlled experimental variable is the number of hidden neurons in each species.
+BattlEvo is a dependency-free browser neural-evolution arcade. Three independently evolving species — **red, green and blue** — get the same senses, movement rules, projectile physics and evolutionary system. The player changes the hidden-neuron count for each species, chooses a scenario, and watches different brain sizes learn.
 
-## Training grounds
+## Scenarios
 
 - **Target Practice** — semi-regular moving targets, projectile travel time, aiming and leading. Targets never shoot back.
-- **Battlefield Run** — cross a randomly oriented battlefield while arrows travel perpendicular to the route. Trains threat awareness, timing, dodging and remembered cover.
-- **Invaders** — randomly oriented Space-Invaders-style defence. Agents move on one axis, can face independently, fire, dodge incoming shots and use bunkers.
-- **Battle Royale** — red vs green vs blue team combat. Agents recognise their own colour as friendly and do not attack teammates.
+- **Battlefield Run** — cross a randomly oriented battlefield while arrows travel perpendicular to the route. Trains threat awareness, timing, dodging and remembered cover. Species do not fire in this mode.
+- **Invaders** — randomly oriented Space-Invaders-style defence. Agents move on one axis, face independently, fire, dodge incoming shots and use bunkers. Only the front-most invader in each column can fire. Each logical alien has a separate Red/Green/Blue alive-state, so one species cannot steal another species' training target.
+- **Battle Royale** — red vs green vs blue team combat. Agents recognise their own colour as friendly. Team homes are equidistant and rotate through equivalent map positions between generations.
 
-The practice modes deliberately share sensory channels with Battle Royale: moving practice targets, invaders and enemy species all use the same hostile-tracking inputs, while arrows and incoming combat fire use the same projectile inputs. That means skills evolved in the practice modes can transfer into combat.
-
-Once evolution has started, you can switch training grounds without resetting the populations. The current arena is discarded, but the evolved neural-network weights and generation are kept. **Reset** is the explicit full wipe.
+The practice modes deliberately share sensory channels with Battle Royale: moving practice targets, invaders and enemy species all use the same hostile-tracking inputs, while arrows and incoming combat fire use the same projectile inputs. Switching scenarios keeps the evolved populations and generation; **Reset evolution** is the explicit full wipe.
 
 ## Agent rules
 
-- 180° forward vision: direct sensory input stops behind the agent.
+- The active combat field is a centred square. Rotating UP / RIGHT / DOWN / LEFT therefore changes direction without changing route length, dodge space or Invader breach distance.
+- Full-field **180° forward vision**. Anything behind the creature is unseen until it turns.
+- Bunkers block both sight and projectiles.
+- Once a bunker has been seen, its location remains in that creature's 360° remembered terrain map for the rest of the episode.
 - Eight facing directions and eight movement directions; facing and movement are independent.
-- Bunkers only enter memory after they have appeared in the forward field, then remain in a 360° remembered terrain map after the agent moves past or turns away from them.
-- All creatures, moving targets and invaders use the same movement speed.
-- All projectiles use the same projectile speed. Projectiles are faster than creatures, but remain visible and potentially dodgeable.
+- All creatures, moving targets and invaders use the same movement speed: **1.65 px/tick ≈ 99 px/s** at 60 simulation ticks/s.
+- Every projectile uses the same speed: **4.6 px/tick ≈ 276 px/s**, about **2.79× creature speed**. It can catch a fleeing creature but remains visible and dodgeable.
 - Species never interbreed.
-- Neural networks have one hidden layer. The player chooses the hidden-neuron count independently for red, green and blue.
+- Neural networks have one hidden layer. The player chooses only the hidden-neuron count independently for red, green and blue.
 
-## Run it
+## Evolution fairness
+
+BattlEvo is intended to make brain-size comparisons meaningful rather than accidentally testing spawn luck.
+
+- Genotypes are randomly assigned to physical spawn slots each generation so elite index 0 does not inherit a permanently favourable lane.
+- Practice-mode species start in equivalent, visibly separate positions rather than different regions or exact visual stacks.
+- Battlefield arrows can logically hit at most one creature of each colour, so one species cannot act as a physical shield for another in a training run.
+- Invaders provide the same kill opportunities independently to all three species.
+- All directional scenarios are rotated copies of the same square-field geometry.
+- Battle Royale uses equidistant team homes and rotationally symmetric cover.
+- Crossover preserves whole hidden-neuron subcircuits (incoming weights, bias and outgoing weights) instead of independently shredding every weight.
+- Mutation load scales sub-linearly with genome size, so larger brains explore more parameters without receiving hundreds of extra mutations simply because they contain more weights.
+
+## Physics audit
+
+The automated gameplay audit currently measures:
+
+- projectile / creature speed ratio: **2.788×**
+- reaction time to a stationary shot first noticed 100 px away: **0.362 s**
+- possible perpendicular movement in that time: **35.9 px** (over five creature radii)
+- time for a projectile to catch a creature fleeing directly away from 100 px: **0.565 s**
+- Invader hostile fire density in a deterministic 10-second sample: **27 shots**, or about **2.7 shots/s** across the formation
+- Battlefield starting progress across all four rotations: **identical (0.0467)**
+- Invader breach distance across all four rotations: **identical (412 px)**
+
+These values are intended to make projectiles dangerous and visibly faster without turning dodging into luck.
+
+## Run locally
 
 No build step and no dependencies are required.
 
@@ -38,8 +65,33 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-The same files are suitable for GitHub Pages.
+## GitHub Pages
+
+`.github/workflows/pages.yml` contains the official GitHub Pages static deployment workflow and publishes only the six browser game files. GitHub requires a one-time repository setting before the first deployment: **Settings → Pages → Source → GitHub Actions**. After that, every push to `main` deploys the game automatically.
+
+## Automated audit
+
+The GitHub Actions audit now includes:
+
+- JavaScript syntax checks
+- runtime smoke tests and complete generation rollover in all four scenarios
+- 180° sight, bunker occlusion and remembered terrain
+- projectile/creature speed balance
+- rotational fairness for Battlefield and Invaders
+- friendly-fire prevention
+- independent Invader targets per species
+- Battlefield anti-shielding behaviour
+- Invader bullet-density limits
+- scenario switching without resetting evolved brains
+- desktop **and phone** headless screenshots for visual review
+
+Run both gameplay tests locally with:
+
+```bash
+node tests/smoke.js
+node tests/audit.js
+```
 
 ## Current version
 
-**v0.1.0** — first playable evolutionary prototype.
+**v0.2.0** — gameplay, fairness, perception, UI/UX, performance and deployment audit.
