@@ -1,6 +1,6 @@
 'use strict';
 
-// PR verification copy after direction-rich target heading balance was added to main.
+// PR verification copy using BattlEvo's own eight-direction classifier.
 const fs=require('fs');
 const vm=require('vm');
 const assert=require('assert');
@@ -37,7 +37,7 @@ for(let gen=0;gen<16;gen++){
   })`);
   const q=p=>(p.x<480?0:1)+(p.y<300?0:2);
   snap.agents.forEach(a=>{quadrants.agents.add(q(a));facings.add(a.f);allAgentX.push(a.x);allAgentY.push(a.y);});
-  snap.targets.forEach(t=>{quadrants.targets.add(q(t));headings.add(`${Math.sign(t.dx)},${Math.sign(t.dy)}`);allTargetX.push(t.x);allTargetY.push(t.y);});
+  snap.targets.forEach(t=>{quadrants.targets.add(q(t));headings.add(ev(`vecToDir(${t.dx},${t.dy})`));allTargetX.push(t.x);allTargetY.push(t.y);});
   signatures.add(JSON.stringify({a:snap.agents.slice(0,6),t:snap.targets,b:snap.bunkers}));
 
   for(const a of snap.agents){
@@ -52,7 +52,7 @@ assert.strictEqual(quadrants.agents.size,4,'creatures did not populate all four 
 assert.strictEqual(quadrants.targets.size,4,'targets did not populate all four arena quadrants');
 assert.ok(signatures.size>=15,'Target Practice layouts are repeating instead of randomizing');
 assert.ok(facings.size===8,'random creature facing did not cover all eight directions');
-assert.ok(headings.size>=7,'moving targets are not using a broad set of headings');
+assert.strictEqual(headings.size,8,'moving targets did not cover all eight compass headings across the audit');
 assert.ok(Math.max(...allAgentX)-Math.min(...allAgentX)>500,'creature x spawns remain too constrained');
 assert.ok(Math.max(...allAgentY)-Math.min(...allAgentY)>500,'creature y spawns remain too constrained');
 assert.ok(Math.max(...allTargetX)-Math.min(...allTargetX)>450,'target x spawns remain too constrained');
