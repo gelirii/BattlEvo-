@@ -2,7 +2,7 @@ function stepTargets(){
   for(const t of sim.targets){
     // Semi-regular movement: straight/bouncing with a gentle periodic turn.
     if((sim.tick+t.id*17)%240===0){ const nd=vecToDir(t.dx,t.dy); const turn=((t.id%2)?1:-1); const d=DIRS[(nd+turn+8)%8];t.dx=d.x;t.dy=d.y; }
-    t.x+=t.dx*t.speed;t.y+=t.dy*t.speed;
+    const len=Math.hypot(t.dx,t.dy)||1; t.x+=(t.dx/len)*t.speed;t.y+=(t.dy/len)*t.speed;
     if(t.x<35||t.x>W-35){t.dx*=-1;t.x=clamp(t.x,35,W-35);} if(t.y<35||t.y>H-35){t.dy*=-1;t.y=clamp(t.y,35,H-35);} if(t.hitFlash>0)t.hitFlash--;
   }
 }
@@ -32,10 +32,16 @@ function invaderForward(){ if(sim.orientation===0)return{x:0,y:1}; if(sim.orient
 function invaderShuffle(){ return (sim.orientation===0||sim.orientation===2)?{x:1,y:0}:{x:0,y:1}; }
 function stepInvaders(){
   const f=invaderForward(), s=invaderShuffle(); const alive=sim.invaders.filter(n=>n.alive);
-  if(sim.tick%180===0) for(const n of alive)n.shuffle*=-1;
-  const migrate=(sim.tick%75===0)?AGENT_SPEED:0;
+  const vertical=sim.orientation===0||sim.orientation===2;
+  if(alive.length){
+    const dir=alive[0].shuffle;
+    const minPos=Math.min(...alive.map(n=>vertical?n.x:n.y)), maxPos=Math.max(...alive.map(n=>vertical?n.x:n.y));
+    if((dir>0&&maxPos>(vertical?W:H)-25)||(dir<0&&minPos<25)) for(const n of alive)n.shuffle*=-1;
+  }
+  const forwardStep=sim.tick%7===0;
   for(const n of alive){
-    n.x += s.x*n.shuffle*AGENT_SPEED + f.x*migrate; n.y += s.y*n.shuffle*AGENT_SPEED + f.y*migrate;
+    if(forwardStep){ n.x+=f.x*AGENT_SPEED; n.y+=f.y*AGENT_SPEED; }
+    else { n.x+=s.x*n.shuffle*AGENT_SPEED; n.y+=s.y*n.shuffle*AGENT_SPEED; }
     n.fireClock--; if(n.fireClock<=0){ n.fireClock=125+randi(120); sim.projectiles.push({x:n.x,y:n.y,vx:f.x*PROJECTILE_SPEED,vy:f.y*PROJECTILE_SPEED,owner:null,team:'invader',r:2.5,dead:false}); }
   }
   // Breach line ends the round.
