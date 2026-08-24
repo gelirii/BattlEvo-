@@ -3,52 +3,56 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f14" />
 <title>BattlEvo</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="shell">
 <header>
-  <div><h1>BattlEvo</h1><div class="sub">Three species. Same world. Different brain sizes.</div></div>
-  <div class="tiny">v0.1.0</div>
+  <div><h1>BattlEvo</h1><div class="sub">Evolve three species. Train their instincts. Send them to war.</div></div>
+  <div class="version">v0.2.0</div>
 </header>
 <div class="grid">
   <aside class="panel controls">
-    <div class="speciesCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label>Hidden neurons</label><input id="brain-red" type="number" min="1" max="64" step="1" value="4"></div>
-    <div class="speciesCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label>Hidden neurons</label><input id="brain-green" type="number" min="1" max="64" step="1" value="10"></div>
-    <div class="speciesCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label>Hidden neurons</label><input id="brain-blue" type="number" min="1" max="64" step="1" value="20"></div>
+    <div class="sectionLabel">Species brains</div>
+    <div class="speciesCard redCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label for="brain-red">Hidden neurons</label><input id="brain-red" type="number" min="1" max="64" step="1" value="4"></div>
+    <div class="speciesCard greenCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label for="brain-green">Hidden neurons</label><input id="brain-green" type="number" min="1" max="64" step="1" value="10"></div>
+    <div class="speciesCard blueCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label for="brain-blue">Hidden neurons</label><input id="brain-blue" type="number" min="1" max="64" step="1" value="20"></div>
 
-    <div>
-      <label>Training ground</label>
+    <div class="scenarioPicker">
+      <div class="sectionLabel">Scenario</div>
       <div class="modes" id="modes">
-        <button data-mode="target" class="active">🎯 Target<br>Practice</button>
-        <button data-mode="battlefield">🏹 Battlefield<br>Run</button>
-        <button data-mode="invaders">👾 Invaders</button>
-        <button data-mode="royale">⚔️ Battle<br>Royale</button>
+        <button data-mode="target" class="active"><span>🎯</span> Target Practice</button>
+        <button data-mode="battlefield"><span>🏹</span> Battlefield Run</button>
+        <button data-mode="invaders"><span>👾</span> Invaders</button>
+        <button data-mode="royale"><span>⚔️</span> Battle Royale</button>
       </div>
+      <div id="mode-brief" class="brief">Track semi-regular moving targets and learn to lead shots. Targets never fire back.</div>
     </div>
 
     <button id="start" class="primary">START EVOLUTION</button>
-    <div class="buttonRow"><button id="pause" disabled>Pause</button><button id="reset" disabled>Reset</button></div>
-    <div><label>Simulation speed</label><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
-    <div class="tiny memoryNote">Agents see a 180° forward field. Bunkers leave a remembered map trace after being seen, even when they move behind the agent. Once running, you can change training ground without resetting the evolved brains.</div>
+    <div class="buttonRow"><button id="pause" disabled>Pause</button><button id="reset" disabled>Reset evolution</button></div>
+    <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
+    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles, but once a bunker has been seen its location remains in that creature's remembered map. Switching scenarios keeps the evolved brains; Reset evolution wipes them.</div>
   </aside>
 
-  <main class="panel">
+  <main class="panel arenaPanel">
     <div class="hud">
-      <div class="hudBox"><span>Mode</span><strong id="hud-mode">Target Practice</strong></div>
+      <div class="hudBox"><span>Scenario</span><strong id="hud-mode">Target Practice</strong></div>
       <div class="hudBox"><span>Generation</span><strong id="hud-gen">0</strong></div>
-      <div class="hudBox"><span>Orientation</span><strong id="hud-orient">—</strong></div>
-      <div class="hudBox"><span>Time</span><strong id="hud-time">0.0s</strong></div>
+      <div class="hudBox"><span>Objective</span><strong id="hud-orient">—</strong></div>
+      <div class="hudBox"><span>Sim time</span><strong id="hud-time">0.0s</strong></div>
       <div class="hudBox"><span>Population</span><strong>12 × 3</strong></div>
     </div>
-    <canvas id="game" width="960" height="600"></canvas>
+    <canvas id="game" width="960" height="600" aria-label="BattlEvo simulation arena"></canvas>
+    <div class="resultStrip"><span>Last round</span><strong id="round-result">No completed rounds yet.</strong></div>
     <div class="speciesStats">
-      <div class="statCard"><b>🔴 Red</b><div class="statLine" id="stat-red">Waiting to evolve.</div></div>
-      <div class="statCard"><b>🟢 Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div></div>
-      <div class="statCard"><b>🔵 Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div></div>
+      <div class="statCard" id="card-red"><b><span class="dot red"></span> Red</b><div class="statLine" id="stat-red">Waiting to evolve.</div></div>
+      <div class="statCard" id="card-green"><b><span class="dot green"></span> Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div></div>
+      <div class="statCard" id="card-blue"><b><span class="dot blue"></span> Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div></div>
     </div>
-    <div class="legend">Agents are coloured discs; the bright nose line shows facing while movement remains independent. Yellow marks are species projectiles, pale arrows are battlefield fire, purple shots belong to invaders, and tan blocks are bunkers. In Battle Royale, agents treat their own colour as friendly.</div>
+    <div class="legend">The bright nose line shows facing; movement is independent. Species shots inherit their colour, pale arrows are battlefield fire, purple shots belong to invaders, and tan blocks are bunkers. A thin ring around a Battle Royale creature shows its remaining health.</div>
   </main>
 </div>
 </div>
