@@ -1,4 +1,4 @@
-name: BattlEvo smoke test
+name: BattlEvo gameplay audit
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  smoke:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,5 +19,25 @@ jobs:
           node --check brain-world.js
           node --check modes.js
           node --check ui.js
-      - name: Run simulation smoke test
+          node --check tests/smoke.js
+      - name: Run gameplay audit
         run: node tests/smoke.js
+
+  ui-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 >/tmp/battlevo-server.log 2>&1 &
+          sleep 1
+      - name: Capture desktop UI
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then echo "Chrome/Chromium not present on runner"; exit 1; fi
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1000 --screenshot=battlevo-ui.png http://127.0.0.1:8000/
+          test -s battlevo-ui.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battlevo-ui
+          path: battlevo-ui.png
