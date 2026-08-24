@@ -1,6 +1,6 @@
 'use strict';
 
-// PR verification copy: exercises the exact Target Practice randomization now on main.
+// PR verification copy after direction-rich target heading balance was added to main.
 const fs=require('fs');
 const vm=require('vm');
 const assert=require('assert');
