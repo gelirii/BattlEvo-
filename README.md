@@ -25,7 +25,7 @@ The practice modes deliberately share sensory channels with Battle Royale: movin
 
 ## Evolution fairness
 
-BattlEvo is intended to make brain-size comparisons meaningful rather than accidentally testing spawn luck.
+BattlEvo is intended to make brain-size comparisons meaningful rather than accidentally testing spawn luck or initialization bias.
 
 - Genotypes are randomly assigned to physical spawn slots each generation so elite index 0 does not inherit a permanently favourable lane.
 - Practice-mode species start in equivalent, visibly separate positions rather than different regions or exact visual stacks.
@@ -34,7 +34,8 @@ BattlEvo is intended to make brain-size comparisons meaningful rather than accid
 - All directional scenarios are rotated copies of the same square-field geometry.
 - Battle Royale uses equidistant team homes and rotationally symmetric cover.
 - Crossover preserves whole hidden-neuron subcircuits (incoming weights, bias and outgoing weights) instead of independently shredding every weight.
-- Mutation load scales sub-linearly with genome size, so larger brains explore more parameters without receiving hundreds of extra mutations simply because they contain more weights.
+- Mutation frequency scales sub-linearly with genome size, while mutation amplitude scales with each parameter's own natural weight scale.
+- Initial neural weights use fan-in normalization. A wider hidden layer therefore starts with essentially the same action-signal magnitude as a small one instead of becoming automatically “louder”.
 
 ## Physics audit
 
@@ -49,6 +50,18 @@ The automated gameplay audit currently measures:
 - Invader breach distance across all four rotations: **identical (412 px)**
 
 These values are intended to make projectiles dangerous and visibly faster without turning dodging into luck.
+
+## Neural fairness audit
+
+A separate statistical test feeds identical sensory probes through many randomly initialized networks with different hidden widths. Current results:
+
+- **4 neurons:** output RMS 0.4625; positive fire logit 48.9%
+- **10 neurons:** output RMS 0.4643; positive fire logit 47.9%
+- **20 neurons:** output RMS 0.4625; positive fire logit 50.1%
+- **64 neurons:** output RMS 0.4664; positive fire logit 49.0%
+- total output-RMS spread across 4→64 neurons: **1.009×**
+
+This means different brain sizes begin with comparable signal strength and neutral action bias; the meaningful difference is available neural capacity and how evolution uses it.
 
 ## Run locally
 
@@ -83,15 +96,17 @@ The GitHub Actions audit now includes:
 - Battlefield anti-shielding behaviour
 - Invader bullet-density limits
 - scenario switching without resetting evolved brains
+- statistical 4/10/20/64-neuron initialization fairness
 - desktop **and phone** headless screenshots for visual review
 
-Run both gameplay tests locally with:
+Run the audits locally with:
 
 ```bash
 node tests/smoke.js
 node tests/audit.js
+node tests/neural-fairness.js
 ```
 
 ## Current version
 
-**v0.2.0** — gameplay, fairness, perception, UI/UX, performance and deployment audit.
+**v0.2.1** — gameplay, fairness, perception, UI/UX, performance, deployment and neural initialization audit.
