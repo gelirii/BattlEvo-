@@ -1,0 +1,23 @@
+name: BattlEvo smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check core.js
+          node --check brain-world.js
+          node --check modes.js
+          node --check ui.js
+      - name: Run simulation smoke test
+        run: node tests/smoke.js
