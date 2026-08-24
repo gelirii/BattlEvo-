@@ -62,14 +62,36 @@ class Brain {
   }
   clone(){ return new Brain(this.hidden,this.g); }
   static child(a,b){
-    const g=new Float32Array(a.g.length);
+    const hidden=a.hidden,g=new Float32Array(a.g.length);
+    const hiddenBiasBase=INPUTS*hidden;
+    const outputWeightBase=hiddenBiasBase+hidden;
+    const outputBiasBase=outputWeightBase+hidden*OUTPUTS;
+
+    // Crossover whole hidden units rather than shredding each neuron's incoming and
+    // outgoing weights independently. This preserves useful evolved subcircuits better.
+    for(let j=0;j<hidden;j++){
+      const src=Math.random()<0.5?a:b;
+      for(let i=0;i<INPUTS;i++)g[j*INPUTS+i]=src.g[j*INPUTS+i];
+      g[hiddenBiasBase+j]=src.g[hiddenBiasBase+j];
+      for(let o=0;o<OUTPUTS;o++)g[outputWeightBase+o*hidden+j]=src.g[outputWeightBase+o*hidden+j];
+    }
+    for(let o=0;o<OUTPUTS;o++)g[outputBiasBase+o]=(Math.random()<0.5?a:b).g[outputBiasBase+o];
+
+    // A fixed per-weight mutation rate punished large brains: a 64-neuron child could
+    // receive 500+ changed weights while a 4-neuron child received only ~30. Scale the
+    // rate sub-linearly so larger brains still explore more parameters without being
+    // genetically scrambled just for having more capacity.
+    const referenceGenes=INPUTS*4+4+4*OUTPUTS+OUTPUTS;
+    const scale=Math.sqrt(referenceGenes/g.length);
+    const mutationRate=Math.min(0.06,0.06*scale);
+    const resetRate=Math.min(0.004,0.004*scale);
     for(let i=0;i<g.length;i++){
-      let v=Math.random()<0.5?a.g[i]:b.g[i];
-      if(Math.random()<0.085) v += gaussian()*0.28;
-      if(Math.random()<0.006) v = gaussian()*0.6;
+      let v=g[i];
+      if(Math.random()<mutationRate)v+=gaussian()*0.28;
+      if(Math.random()<resetRate)v=gaussian()*0.6;
       g[i]=clamp(v,-4,4);
     }
-    return new Brain(a.hidden,g);
+    return new Brain(hidden,g);
   }
 }
 
