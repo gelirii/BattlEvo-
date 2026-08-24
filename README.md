@@ -4,12 +4,23 @@ BattlEvo is a dependency-free browser neural-evolution arcade. Three independent
 
 ## Scenarios
 
-- **Target Practice** — semi-regular moving targets, projectile travel time, aiming and leading. Targets never shoot back.
+- **Target Practice** — creatures, bunkers and moving targets are repositioned across the arena every generation. Six targets start with six distinct directions drawn from the eight compass headings, preventing a fixed “enemy is up” lesson. Targets never shoot back.
 - **Battlefield Run** — cross a randomly oriented battlefield while arrows travel perpendicular to the route. Trains threat awareness, timing, dodging and remembered cover. Species do not fire in this mode.
 - **Invaders** — randomly oriented Space-Invaders-style defence. Agents move on one axis, face independently, fire, dodge incoming shots and use bunkers. Only the front-most invader in each column can fire. Each logical alien has a separate Red/Green/Blue alive-state, so one species cannot steal another species' training target.
 - **Battle Royale** — red vs green vs blue team combat. Agents recognise their own colour as friendly. Team homes are equidistant and rotate through equivalent map positions between generations.
 
 The practice modes deliberately share sensory channels with Battle Royale: moving practice targets, invaders and enemy species all use the same hostile-tracking inputs, while arrows and incoming combat fire use the same projectile inputs. Switching scenarios keeps the evolved populations and generation; **Reset evolution** is the explicit full wipe.
+
+## Lifetime scoreboard
+
+Generation-by-generation fitness remains part of evolution internally, but the visible leaderboard is based on accumulated performance across the whole run:
+
+- **Target Practice:** total hits
+- **Battlefield Run:** total successful crossings
+- **Invaders:** total Invader kills
+- **Battle Royale:** career kill-to-death ratio, with raw kills and deaths shown alongside it
+
+Each scenario keeps its own Red/Green/Blue lifetime records. Switching to another scenario does not erase them; returning later restores that scenario's scoreboard. **Reset evolution** clears both the brains and all lifetime records. The visible **LEADER** badge follows the accumulated scenario statistic instead of a single generation's fitness score.
 
 ## Agent rules
 
@@ -28,7 +39,7 @@ The practice modes deliberately share sensory channels with Battle Royale: movin
 BattlEvo is intended to make brain-size comparisons meaningful rather than accidentally testing spawn luck or initialization bias.
 
 - Genotypes are randomly assigned to physical spawn slots each generation so elite index 0 does not inherit a permanently favourable lane.
-- Practice-mode species start in equivalent, visibly separate positions rather than different regions or exact visual stacks.
+- Target Practice randomises creature positions, facing, cover, target positions and target headings across the whole square field.
 - Battlefield arrows can logically hit at most one creature of each colour, so one species cannot act as a physical shield for another in a training run.
 - Invaders provide the same kill opportunities independently to all three species.
 - All directional scenarios are rotated copies of the same square-field geometry.
@@ -80,7 +91,7 @@ Then open `http://localhost:8000`.
 
 ## GitHub Pages
 
-The repository is intended to publish directly from **`main` / root**. Because the game is plain HTML/CSS/JavaScript, no Pages build workflow is required. The root `.nojekyll` file makes the static publishing intent explicit.
+The repository publishes directly from **`main` / root**. Because the game is plain HTML/CSS/JavaScript, no Pages build workflow is required. The root `.nojekyll` file makes the static publishing intent explicit.
 
 ## iPhone / mobile
 
@@ -100,6 +111,8 @@ The GitHub Actions audit includes:
 - Battlefield anti-shielding behaviour
 - Invader bullet-density limits
 - scenario switching without resetting evolved brains
+- Target Practice all-quadrant/all-heading randomisation checks
+- lifetime hit/cross/kill/K:D event accounting
 - statistical 4/10/20/64-neuron initialization fairness
 - desktop **and phone** headless screenshots for visual review
 
@@ -109,8 +122,10 @@ Run the audits locally with:
 node tests/smoke.js
 node tests/audit.js
 node tests/neural-fairness.js
+node tests/target-randomization.js
+node tests/lifetime-scoreboard.js
 ```
 
 ## Current version
 
-**v0.2.2** — gameplay/fairness audit plus branch-based GitHub Pages and iPhone Safari polish.
+**v0.2.4** — accumulated species scoreboards, direction-neutral Target Practice and mobile-friendly game UI.

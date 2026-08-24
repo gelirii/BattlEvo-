@@ -176,7 +176,11 @@ function projectileBlocked(p){return sim.bunkers.some(b=>rectCircleHit(b,p,p.r))
 function projectileOutOfArena(p){return!inArenaPoint(p,12);}
 function killAgent(a,by=null){
   if(!a.alive)return;a.alive=false;a.health=0;a.deathTick=sim.tick;a.fitness-=25;
-  if(by&&by.owner&&by.owner!==a){by.owner.fitness+=35;by.owner.kills++;}
+  if(sim.mode==='royale'&&typeof lifetimeAdd==='function')lifetimeAdd('royale',a.species.id,'deaths');
+  if(by&&by.owner&&by.owner!==a){
+    by.owner.fitness+=35;by.owner.kills++;
+    if(sim.mode==='royale'&&typeof lifetimeAdd==='function')lifetimeAdd('royale',by.owner.species.id,'kills');
+  }
 }
 
 function finishInvaderTeam(team){
@@ -194,14 +198,14 @@ function stepProjectiles(){
     if(projectileOutOfArena(p)||projectileBlocked(p)){p.dead=true;continue;}
     if(sim.mode==='target'){
       for(const t of sim.targets){
-        if(circleHit(p,t,p.r,t.r)){p.dead=true;t.hitFlash=6;if(p.owner){p.owner.hits++;p.owner.fitness+=45;}break;}
+        if(circleHit(p,t,p.r,t.r)){p.dead=true;t.hitFlash=6;if(p.owner){p.owner.hits++;p.owner.fitness+=45;if(typeof lifetimeAdd==='function')lifetimeAdd('target',p.owner.species.id,'hits');}break;}
       }
     }else if(sim.mode==='invaders'&&p.owner){
       const team=p.owner.species.id;
       for(const n of sim.invaders){
         if(n.aliveFor?.[team]&&circleHit(p,n,p.r,n.r)){
           p.dead=true;n.aliveFor[team]=false;n.alive=SPECIES.some(s=>n.aliveFor[s.id]);n.flash=6;
-          p.owner.hits++;p.owner.kills++;p.owner.fitness+=85;finishInvaderTeam(team);break;
+          p.owner.hits++;p.owner.kills++;p.owner.fitness+=85;if(typeof lifetimeAdd==='function')lifetimeAdd('invaders',team,'kills');finishInvaderTeam(team);break;
         }
       }
     }else if(sim.mode==='royale'){
