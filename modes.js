@@ -45,7 +45,7 @@ function stepBattlefield(){
     if(sim.orientation===2&&a.y>FIELD.bottom-16)done=true;
     if(sim.orientation===1&&a.x>FIELD.right-16)done=true;
     if(sim.orientation===3&&a.x<FIELD.left+16)done=true;
-    if(done){a.finished=true;a.alive=false;a.fitness+=700+(MAX_TICKS.battlefield-sim.tick)*.2;}
+    if(done){a.finished=true;a.alive=false;a.fitness+=700+(MAX_TICKS.battlefield-sim.tick)*.2;if(typeof lifetimeAdd==='function')lifetimeAdd('battlefield',a.species.id,'crosses');}
   }
 }
 
