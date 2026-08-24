@@ -1,6 +1,6 @@
 'use strict';
 
-// BattlEvo v0.1 — dependency-free neural evolution arcade.
+// BattlEvo v0.2.0 — dependency-free neural evolution arcade.
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
@@ -15,6 +15,7 @@ const POP_SIZE = 12;
 const AGENT_SPEED = 1.65;
 const PROJECTILE_SPEED = 4.6;
 const AGENT_R = 7;
+const SIGHT_RANGE = Math.hypot(W,H) + 1; // Everything anywhere in the forward half of the arena can be sensed unless cover blocks it.
 const INPUTS = 77;
 const OUTPUTS = 18; // 9 movement (stay + 8 dirs), 8 facing, 1 fire.
 const MAX_TICKS = {target:1800, battlefield:1500, invaders:1800, royale:2100};
@@ -36,7 +37,8 @@ function gaussian(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.rand
 function circleHit(a,b,ra,rb){ return dist2(a,b) <= (ra+rb)*(ra+rb); }
 function rectCircleHit(r,c,cr){ const px=clamp(c.x,r.x,r.x+r.w), py=clamp(c.y,r.y,r.y+r.h); const dx=c.x-px,dy=c.y-py; return dx*dx+dy*dy<=cr*cr; }
 function vecToDir(x,y){ if(Math.abs(x)<.001&&Math.abs(y)<.001)return -1; let a=Math.atan2(y,x); if(a<0)a+=TAU; return Math.round(a/(Math.PI/4))%8; }
-function randomEdgePoint(m=30){ const e=randi(4); if(e===0)return{x:rand(W-m,m),y:m}; if(e===1)return{x:W-m,y:rand(H-m,m)}; if(e===2)return{x:rand(W-m,m),y:H-m}; return{x:m,y:rand(H-m,m)}; }
+function shuffledIndices(n){ const a=Array.from({length:n},(_,i)=>i); for(let i=n-1;i>0;i--){const j=randi(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function speciesOffset(s,amount=7){ return (SPECIES.findIndex(x=>x.id===s.id)-1)*amount; }
 
 class Brain {
   constructor(hidden, genome=null){
@@ -89,7 +91,7 @@ class Agent {
   constructor(species, genotype, idx, x, y, facing=0){
     this.species=species; this.genotype=genotype; this.idx=idx; this.x=x; this.y=y; this.facing=facing;
     this.moveDir=-1; this.alive=true; this.health=1; this.cooldown=0; this.fitness=0; this.hits=0; this.kills=0; this.shots=0;
-    this.memory=new Map(); this.finished=false; this.flash=0; this.lastX=x; this.lastY=y;
+    this.memory=new Map(); this.finished=false; this.flash=0; this.lastX=x; this.lastY=y; this.deathTick=null;
   }
 }
 
@@ -101,7 +103,7 @@ function initSimulation(){
     green:clamp(parseInt(document.getElementById('brain-green').value)||10,1,64),
     blue:clamp(parseInt(document.getElementById('brain-blue').value)||20,1,64)
   };
-  sim={mode:selectedMode,generation:1,tick:0,orientation:0,agents:[],projectiles:[],bunkers:[],targets:[],invaders:[],arrows:[], populations:{}, bestEver:{red:-Infinity,green:-Infinity,blue:-Infinity}, winner:null, endReason:''};
+  sim={mode:selectedMode,generation:1,tick:0,orientation:0,agents:[],projectiles:[],bunkers:[],targets:[],invaders:[],arrows:[], populations:{}, bestEver:{red:-Infinity,green:-Infinity,blue:-Infinity}, winner:null, endReason:'',lastSummary:'No completed rounds yet.'};
   for(const s of SPECIES) sim.populations[s.id]=makePopulation(h[s.id]);
   setupGeneration();
   setRunningUI(true);
@@ -117,11 +119,14 @@ function setupGeneration(){
   updateHud();
 }
 
+// Genotype index and physical spawn slot are deliberately decoupled. Elites do not inherit
+// a permanently favourable lane/position just because evolution sorted them to index 0 or 1.
 function spawnSpeciesAgents(spawnFn){
   for(const s of SPECIES){
     const pop=sim.populations[s.id];
+    const slots=shuffledIndices(POP_SIZE);
     pop.forEach((g,i)=>{
-      const p=spawnFn(s,i); sim.agents.push(new Agent(s,g,i,p.x,p.y,p.facing??randi(8)));
+      const p=spawnFn(s,slots[i]); sim.agents.push(new Agent(s,g,i,p.x,p.y,p.facing??randi(8)));
     });
   }
 }
@@ -129,10 +134,13 @@ function spawnSpeciesAgents(spawnFn){
 function setupTarget(){
   sim.orientation=randi(4);
   sim.bunkers=[newBunker(250,170,75,38,'T1'),newBunker(625,390,80,38,'T2'),newBunker(445,270,60,60,'T3')];
-  spawnSpeciesAgents((s,i)=>{
-    const band=SPECIES.findIndex(x=>x.id===s.id);
-    return {x:120+band*360 + (i%4)*18, y:500-Math.floor(i/4)*22, facing:6};
-  });
+  // Each lane starts as a small red/green/blue trio so every species sees essentially
+  // the same target geometry instead of owning a permanently easier side of the arena.
+  spawnSpeciesAgents((s,slot)=>({
+    x:clamp(75+slot*(810/(POP_SIZE-1))+speciesOffset(s,7),AGENT_R,W-AGENT_R),
+    y:525,
+    facing:6
+  }));
   const paths=[
     {x:130,y:95,dx:1,dy:0},{x:820,y:130,dx:-1,dy:0},{x:160,y:300,dx:1,dy:1},{x:800,y:260,dx:-1,dy:1},
     {x:470,y:105,dx:0,dy:1},{x:520,y:470,dx:0,dy:-1}
@@ -144,12 +152,12 @@ function setupBattlefield(){
   const vertical = sim.orientation===0||sim.orientation===2;
   sim.bunkers = vertical ? [newBunker(180,170,75,36,'B1'),newBunker(540,270,90,38,'B2'),newBunker(300,410,70,36,'B3'),newBunker(735,455,70,36,'B4')]
                          : [newBunker(210,120,38,78,'B1'),newBunker(385,360,38,90,'B2'),newBunker(585,180,38,75,'B3'),newBunker(760,390,38,75,'B4')];
-  spawnSpeciesAgents((s,i)=>{
-    const lane=(i+SPECIES.findIndex(x=>x.id===s.id)*4)%POP_SIZE;
-    if(sim.orientation===0) return{x:70+lane*(820/(POP_SIZE-1)),y:H-28,facing:6};
-    if(sim.orientation===2) return{x:70+lane*(820/(POP_SIZE-1)),y:28,facing:2};
-    if(sim.orientation===1) return{x:28,y:55+lane*(490/(POP_SIZE-1)),facing:0};
-    return{x:W-28,y:55+lane*(490/(POP_SIZE-1)),facing:4};
+  spawnSpeciesAgents((s,slot)=>{
+    const offset=speciesOffset(s,6);
+    if(sim.orientation===0) return{x:clamp(70+slot*(820/(POP_SIZE-1))+offset,AGENT_R,W-AGENT_R),y:H-28,facing:6};
+    if(sim.orientation===2) return{x:clamp(70+slot*(820/(POP_SIZE-1))+offset,AGENT_R,W-AGENT_R),y:28,facing:2};
+    if(sim.orientation===1) return{x:28,y:clamp(55+slot*(490/(POP_SIZE-1))+offset,AGENT_R,H-AGENT_R),facing:0};
+    return{x:W-28,y:clamp(55+slot*(490/(POP_SIZE-1))+offset,AGENT_R,H-AGENT_R),facing:4};
   });
 }
 
@@ -157,12 +165,12 @@ function setupInvaders(){
   const vertical=sim.orientation===0||sim.orientation===2;
   sim.bunkers = vertical ? [newBunker(160,395,90,34,'I1'),newBunker(435,395,90,34,'I2'),newBunker(710,395,90,34,'I3')]
                          : [newBunker(515,100,34,90,'I1'),newBunker(515,255,34,90,'I2'),newBunker(515,410,34,90,'I3')];
-  spawnSpeciesAgents((s,i)=>{
-    const lane=(i+SPECIES.findIndex(x=>x.id===s.id)*3)%POP_SIZE;
-    if(sim.orientation===0)return{x:85+lane*70,y:H-35,facing:6};
-    if(sim.orientation===2)return{x:85+lane*70,y:35,facing:2};
-    if(sim.orientation===1)return{x:35,y:55+lane*43,facing:0};
-    return{x:W-35,y:55+lane*43,facing:4};
+  spawnSpeciesAgents((s,slot)=>{
+    const offset=speciesOffset(s,5);
+    if(sim.orientation===0)return{x:clamp(85+slot*70+offset,AGENT_R,W-AGENT_R),y:H-35,facing:6};
+    if(sim.orientation===2)return{x:clamp(85+slot*70+offset,AGENT_R,W-AGENT_R),y:35,facing:2};
+    if(sim.orientation===1)return{x:35,y:clamp(55+slot*43+offset,AGENT_R,H-AGENT_R),facing:0};
+    return{x:W-35,y:clamp(55+slot*43+offset,AGENT_R,H-AGENT_R),facing:4};
   });
   const cols=7,rows=3;
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
@@ -171,16 +179,29 @@ function setupInvaders(){
     if(sim.orientation===2){x=230+c*85;y=H-80-r*48;}
     if(sim.orientation===1){x=W-80-r*48;y=140+c*52;}
     if(sim.orientation===3){x=80+r*48;y=140+c*52;}
-    sim.invaders.push({x,y,r:9,row:r,col:c,alive:true,shuffle:1,fireClock:randi(140),flash:0,vx:0,vy:0});
+    sim.invaders.push({x,y,r:9,row:r,col:c,alive:true,shuffle:1,fireClock:60+randi(120),flash:0,vx:0,vy:0});
   }
 }
 
 function setupRoyale(){
   sim.orientation=0;
-  sim.bunkers=[newBunker(210,125,85,40,'R1'),newBunker(665,125,85,40,'R2'),newBunker(210,435,85,40,'R3'),newBunker(665,435,85,40,'R4'),newBunker(440,270,80,60,'R5')];
-  const homes={red:{x:90,y:300,f:0},green:{x:480,y:65,f:2},blue:{x:870,y:300,f:4}};
-  spawnSpeciesAgents((s,i)=>{
-    const h=homes[s.id], angle=(i/POP_SIZE)*TAU, rad=25+(i%3)*12;
+  sim.bunkers=[];
+  for(let i=0;i<6;i++){
+    const a=i*TAU/6,cx=W/2+Math.cos(a)*155,cy=H/2+Math.sin(a)*155;
+    sim.bunkers.push(newBunker(cx-27,cy-27,54,54,'R'+(i+1)));
+  }
+  sim.bunkers.push(newBunker(W/2-34,H/2-34,68,68,'RC'));
+
+  // Three equally spaced team homes on a circle. The six-way phase randomisation rotates
+  // colours through equivalent map positions while preserving exact team-to-team distances.
+  const phase=randi(6)*TAU/6;
+  const homes={};
+  SPECIES.forEach((s,i)=>{
+    const a=phase+i*TAU/3,x=W/2+Math.cos(a)*230,y=H/2+Math.sin(a)*230;
+    homes[s.id]={x,y,f:vecToDir(W/2-x,H/2-y)};
+  });
+  spawnSpeciesAgents((s,slot)=>{
+    const h=homes[s.id], angle=(slot/POP_SIZE)*TAU, rad=18+(slot%3)*8;
     return{x:h.x+Math.cos(angle)*rad,y:h.y+Math.sin(angle)*rad,facing:h.f};
   });
 }
