@@ -19,15 +19,19 @@ jobs:
           node --check brain-world.js
           node --check modes.js
           node --check ui.js
+          node --check target-practice.js
           node --check tests/smoke.js
           node --check tests/audit.js
           node --check tests/neural-fairness.js
+          node --check tests/target-randomization.js
       - name: Run runtime smoke test
         run: node tests/smoke.js
       - name: Run gameplay behaviour audit
         run: node tests/audit.js
       - name: Run brain-size fairness audit
         run: node tests/neural-fairness.js
+      - name: Run Target Practice randomization audit
+        run: node tests/target-randomization.js
 
   ui-snapshot:
     runs-on: ubuntu-latest
