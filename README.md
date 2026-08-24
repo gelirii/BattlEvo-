@@ -80,11 +80,15 @@ Then open `http://localhost:8000`.
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` contains the official GitHub Pages static deployment workflow and publishes only the six browser game files. GitHub requires a one-time repository setting before the first deployment: **Settings → Pages → Source → GitHub Actions**. After that, every push to `main` deploys the game automatically.
+The repository is intended to publish directly from **`main` / root**. Because the game is plain HTML/CSS/JavaScript, no Pages build workflow is required. The root `.nojekyll` file makes the static publishing intent explicit.
+
+## iPhone / mobile
+
+The mobile layout keeps the three brain-size controls compact before starting. Once evolution begins, the arena moves above the settings so it is easier to watch without scrolling through the setup panel first. Safari page scrolling and pinch zoom remain enabled, with the viewport explicitly allowing zoom from **50% to 500%**. Landscape orientation gives the largest practical arena on a phone.
 
 ## Automated audit
 
-The GitHub Actions audit now includes:
+The GitHub Actions audit includes:
 
 - JavaScript syntax checks
 - runtime smoke tests and complete generation rollover in all four scenarios
@@ -109,4 +113,4 @@ node tests/neural-fairness.js
 
 ## Current version
 
-**v0.2.1** — gameplay, fairness, perception, UI/UX, performance, deployment and neural initialization audit.
+**v0.2.2** — gameplay/fairness audit plus branch-based GitHub Pages and iPhone Safari polish.
