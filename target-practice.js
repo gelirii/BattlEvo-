@@ -42,10 +42,14 @@ setupTarget=function(){
   sim.orientation=0;
   sim.bunkers=randomTargetBunkers(3);
 
+  // Six distinct initial headings are sampled from the full eight-direction compass.
+  // This remains random each generation but avoids an unlucky round becoming an
+  // accidental "everything travels east" lesson.
+  const targetDirs=shuffledIndices(8).slice(0,6);
   sim.targets=[];
   for(let i=0;i<6;i++){
     const p=randomTargetPoint(9,sim.bunkers,sim.targets,34);
-    const d=DIRS[randi(8)];
+    const d=DIRS[targetDirs[i]];
     sim.targets.push({
       x:p.x,y:p.y,r:9,id:i,
       dx:d.x,dy:d.y,speed:AGENT_SPEED,
