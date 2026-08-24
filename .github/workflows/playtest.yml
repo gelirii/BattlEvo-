@@ -1,0 +1,22 @@
+name: BattlEvo evolution playtest
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tests/evolution-playtest.js'
+      - '.github/workflows/playtest.yml'
+
+jobs:
+  playtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check playtest
+        run: node --check tests/evolution-playtest.js
+      - name: Run 40-generation gameplay trial
+        run: node tests/evolution-playtest.js
