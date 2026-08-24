@@ -10,8 +10,6 @@ let tickAccumulator=0;
 
 function drawBackground(){
   ctx.fillStyle='#06090d';ctx.fillRect(0,0,W,H);
-  // The side gutters make the square combat field deliberate rather than looking like
-  // unused canvas. All game physics and all four rotated scenarios live inside FIELD.
   ctx.fillStyle='#080d13';ctx.fillRect(FIELD.left,FIELD.top,FIELD.size,FIELD.size);
   ctx.save();ctx.beginPath();ctx.rect(FIELD.left,FIELD.top,FIELD.size,FIELD.size);ctx.clip();
   ctx.strokeStyle='#111a26';ctx.lineWidth=1;
@@ -60,8 +58,7 @@ function drawAgent(a){
   ctx.restore();
 }
 function drawProjectile(p,color='#ffd65a',arrow=false){
-  const len=Math.hypot(p.vx||0,p.vy||0)||1,ux=(p.vx||0)/len,uy=(p.vy||0)/len;
-  const trail=arrow?14:10;
+  const len=Math.hypot(p.vx||0,p.vy||0)||1,ux=(p.vx||0)/len,uy=(p.vy||0)/len,trail=arrow?14:10;
   ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineCap='round';ctx.lineWidth=arrow?2:2.5;
   ctx.globalAlpha=.72;ctx.beginPath();ctx.moveTo(p.x-ux*trail,p.y-uy*trail);ctx.lineTo(p.x,p.y);ctx.stroke();
   ctx.globalAlpha=1;ctx.beginPath();ctx.arc(p.x,p.y,arrow?2.2:2.8,0,TAU);ctx.fill();ctx.restore();
@@ -80,9 +77,8 @@ function drawInvaders(){
   for(const n of sim.invaders){
     if(!n.alive)continue;
     ctx.fillStyle='#b783ff';ctx.fillRect(n.x-7,n.y-6,14,12);ctx.fillRect(n.x-10,n.y+5,5,4);ctx.fillRect(n.x+5,n.y+5,5,4);
-    // Three tiny status lamps show which colour still needs to clear this logical alien.
     const lamps=[['red','#ff4a4a',-6],['green','#45e06f',0],['blue','#4f8cff',6]];
-    for(const [id,c,ox] of lamps){ctx.globalAlpha=n.aliveFor?.[id]?.85:.16;ctx.fillStyle=c;ctx.beginPath();ctx.arc(n.x+ox,n.y-10,1.8,0,TAU);ctx.fill();}
+    for(const [id,c,ox] of lamps){ctx.globalAlpha=n.aliveFor?.[id]?.valueOf()?0.85:0.16;ctx.fillStyle=c;ctx.beginPath();ctx.arc(n.x+ox,n.y-10,1.8,0,TAU);ctx.fill();}
     ctx.globalAlpha=1;
   }
 }
@@ -91,10 +87,7 @@ function draw(){
   if(!sim){ctx.fillStyle='#718098';ctx.font='22px system-ui';ctx.textAlign='center';ctx.fillText('Choose brain sizes and a scenario, then start evolution.',FIELD.cx,FIELD.cy);return;}
   drawArenaGuides();drawOrientation();drawBunkers();if(sim.mode==='target')drawTargets();if(sim.mode==='invaders')drawInvaders();
   for(const p of sim.arrows)drawProjectile(p,'#f3d19b',true);
-  for(const p of sim.projectiles){
-    const color=p.owner?p.owner.species.pale:(p.team==='invader'?'#c58cff':'#ffd65a');
-    drawProjectile(p,color,false);
-  }
+  for(const p of sim.projectiles){const color=p.owner?p.owner.species.pale:(p.team==='invader'?'#c58cff':'#ffd65a');drawProjectile(p,color,false);}
   for(const a of sim.agents)drawAgent(a);
 }
 
@@ -138,17 +131,12 @@ function setRunningUI(on){
   document.body.classList.toggle('running',on);
   document.getElementById('start').disabled=on;document.getElementById('pause').disabled=!on;document.getElementById('reset').disabled=!on;
   for(const id of ['brain-red','brain-green','brain-blue'])document.getElementById(id).disabled=on;
-  // Scenario buttons deliberately stay live. Changing scenario keeps evolved populations
-  // and only discards the unfinished arena episode.
   document.querySelectorAll('#modes button').forEach(b=>b.disabled=false);
 }
 
 function loop(now){
   const dt=Math.min(100,Math.max(0,now-last));last=now;
   if(sim&&!paused){
-    // Fixed-timestep pacing keeps 1× at 60 simulation ticks/sec on 60/90/120 Hz displays.
-    // If old hardware cannot sustain 12×/30×, it gracefully runs slower instead of
-    // accumulating an ever-growing catch-up backlog.
     tickAccumulator=Math.min(tickAccumulator+dt*speed,TICK_MS*MAX_STEPS_PER_FRAME);
     const steps=Math.min(MAX_STEPS_PER_FRAME,Math.floor(tickAccumulator/TICK_MS));
     tickAccumulator-=steps*TICK_MS;
@@ -159,14 +147,8 @@ function loop(now){
 requestAnimationFrame(loop);
 
 document.querySelectorAll('#modes button').forEach(b=>b.addEventListener('click',()=>{
-  selectedMode=b.dataset.mode;
-  document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('active',x===b));
-  if(sim){
-    sim.mode=selectedMode;
-    sim.bestEver={red:-Infinity,green:-Infinity,blue:-Infinity};
-    sim.lastSummary=`Switched to ${MODE_NAMES[selectedMode]} — evolved brains retained at generation ${sim.generation}.`;
-    setupGeneration();
-  }
+  selectedMode=b.dataset.mode;document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('active',x===b));
+  if(sim){sim.mode=selectedMode;sim.bestEver={red:-Infinity,green:-Infinity,blue:-Infinity};sim.lastSummary=`Switched to ${MODE_NAMES[selectedMode]} — evolved brains retained at generation ${sim.generation}.`;setupGeneration();}
   updateHud();
 }));
 document.querySelectorAll('.speedRow button').forEach(b=>b.addEventListener('click',()=>{speed=Number(b.dataset.speed);tickAccumulator=0;document.querySelectorAll('.speedRow button').forEach(x=>x.classList.toggle('active',x===b));}));
