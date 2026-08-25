@@ -8,12 +8,14 @@ global.document={getElementById:id=>elements[id]||{value:'',disabled:false,textC
 for(const file of ['core.js','lifetime-stats.js','target-practice.js','brain-world.js','modes.js'])vm.runInThisContext(fs.readFileSync(file,'utf8'),{filename:file});
 const ev=code=>vm.runInThisContext(code),init=mode=>ev(`selectedMode='${mode}';initSimulation();`);
 
-assert.strictEqual(ev('GAME_VERSION'),'v1.0.0-rc.5');assert.strictEqual(ev('INPUTS'),599);assert.strictEqual(ev('OUTPUTS'),18);assert.strictEqual(ev('MIN_HIDDEN'),1);assert.strictEqual(ev('MAX_HIDDEN'),64);assert.strictEqual(ev('POP_SIZE'),16);assert.strictEqual(ev('TRIALS_PER_GENERATION'),4);assert.strictEqual(ev('MAX_TICKS.royale'),3600);assert.strictEqual(ev('FIELD.size'),ev('H'));assert.ok(ev('PROJECTILE_SPEED>AGENT_SPEED'));
+assert.strictEqual(ev('GAME_VERSION'),'v1.0.0-rc.6');assert.strictEqual(ev('INPUTS'),599);assert.strictEqual(ev('OUTPUTS'),18);assert.strictEqual(ev('MIN_HIDDEN'),1);assert.strictEqual(ev('MAX_HIDDEN'),64);assert.strictEqual(ev('POP_SIZE'),16);assert.strictEqual(ev('TRIALS_PER_GENERATION'),4);assert.strictEqual(ev('MAX_TICKS.royale'),3600);assert.strictEqual(ev('FIELD.size'),ev('H'));assert.ok(ev('PROJECTILE_SPEED>AGENT_SPEED'));
 assert.deepStrictEqual(ev('TACTICAL_SLOTS'),{bunkers:6,friends:15,enemies:32,friendlyProjectiles:12,enemyProjectiles:24});
+assert.strictEqual(ev('typeof aimVectorFromOutputs'),'function');
 
 const expectedCover={target:3,battlefield:4,invaders:3,royale:6};
 for(const mode of ['target','battlefield','invaders','royale']){
   init(mode);assert.strictEqual(ev('sim.agents.length'),48,`${mode}: expected 48 creatures`);assert.strictEqual(ev('sim.bunkers.length'),expectedCover[mode],`${mode}: unexpected bunker count`);assert.strictEqual(ev('buildInputs(sim.agents[0]).length'),599,`${mode}: sensory vector mismatch`);assert.ok(ev('sim.agents.every(a=>inArenaPoint(a))'),`${mode}: spawn outside field`);assert.ok(ev('sim.agents.every(a=>sim.bunkers.every(b=>!rectCircleHit(b,a,AGENT_R+10)))'),`${mode}: spawn too close to cover`);
+  assert.ok(ev('sim.agents.every(a=>Number.isFinite(a.aimX)&&Number.isFinite(a.aimY))'),`${mode}: continuous aim state missing`);
   for(let i=0;i<180;i++)ev('step();');assert.ok(ev('sim&&sim.generation>=1'),`${mode}: runtime stopped`);
 }
 
@@ -40,6 +42,7 @@ assert.ok(/touch-action:auto/.test(css),'canvas must retain native Safari gestur
 assert.ok(/\.canvasViewport\{aspect-ratio:1\}/.test(css.replace(/\s/g,''))||/\.canvasViewport\{aspect-ratio:1/.test(css.replace(/\s/g,'')),'mobile square battlefield crop missing');
 assert.ok(/pauseOverlay\[hidden\]\{display:none!important\}/.test(html.replace(/\s/g,'')),'PAUSED overlay hidden-state CSS regression');
 assert.ok((html.match(/data-save/g)||[]).length>=2,'desktop/mobile save controls missing');
-assert.ok(/599-input tactical screen state/.test(html),'RC5 tactical brain explanation missing');
+assert.ok(/599-input tactical screen state/.test(html),'RC6 tactical brain explanation missing');
+assert.ok(/Aiming is continuous through 360°/.test(html),'RC6 continuous-aim explanation missing');
 assert.ok(fs.existsSync('.nojekyll'));
-console.log('BattlEvo RC5 production smoke test passed.');
+console.log('BattlEvo RC6 production smoke test passed.');
