@@ -19,4 +19,4 @@ for(const mode of Object.keys(expected)){
   }
   assert.ok(signatures.size>=36,`${mode}: insufficient cover randomisation`);
 }
-console.log('BattlEvo RC4 random-cover stress audit passed.');
+console.log('BattlEvo random-cover stress audit passed.');
