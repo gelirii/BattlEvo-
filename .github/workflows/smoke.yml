@@ -16,17 +16,20 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check core.js
+          node --check lifetime-stats.js
+          node --check target-practice.js
           node --check brain-world.js
           node --check modes.js
-          node --check lifetime-stats.js
+          node --check persistence.js
           node --check ui.js
-          node --check target-practice.js
           node --check tests/smoke.js
           node --check tests/audit.js
           node --check tests/neural-fairness.js
           node --check tests/target-randomization.js
           node --check tests/lifetime-scoreboard.js
-      - name: Run runtime smoke test
+          node --check tests/long-run.js
+          node --check tests/webkit.js
+      - name: Run production runtime smoke test
         run: node tests/smoke.js
       - name: Run gameplay behaviour audit
         run: node tests/audit.js
@@ -36,8 +39,10 @@ jobs:
         run: node tests/target-randomization.js
       - name: Run lifetime scoreboard audit
         run: node tests/lifetime-scoreboard.js
+      - name: Run multi-generation playtest
+        run: node tests/long-run.js
 
-  ui-snapshot:
+  chromium-snapshot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,17 +50,37 @@ jobs:
         run: |
           python3 -m http.server 8000 >/tmp/battlevo-server.log 2>&1 &
           sleep 1
-      - name: Capture desktop and phone UI
+      - name: Capture static desktop UI
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           if [ -z "$CHROME" ]; then echo "Chrome/Chromium not present on runner"; exit 1; fi
           "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1000 --virtual-time-budget=1000 --screenshot=battlevo-desktop.png http://127.0.0.1:8000/
-          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,844 --virtual-time-budget=1000 --screenshot=battlevo-phone.png http://127.0.0.1:8000/
           test -s battlevo-desktop.png
-          test -s battlevo-phone.png
       - uses: actions/upload-artifact@v4
         with:
-          name: battlevo-ui
+          name: battlevo-desktop-ui
+          path: battlevo-desktop.png
+
+  webkit-interaction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright WebKit for CI only
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 >/tmp/battlevo-server.log 2>&1 &
+          sleep 1
+      - name: Run interactive WebKit audit
+        run: node tests/webkit.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battlevo-webkit-ui
           path: |
-            battlevo-desktop.png
-            battlevo-phone.png
+            battlevo-webkit-phone.png
+            battlevo-webkit-landscape.png

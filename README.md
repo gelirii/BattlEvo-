@@ -1,122 +1,213 @@
 # BattlEvo
 
-BattlEvo is a dependency-free browser neural-evolution arcade. Three independently evolving species — **red, green and blue** — get the same senses, movement rules, projectile physics and evolutionary system. The player changes the hidden-neuron count for each species, chooses a scenario, and watches different brain sizes learn.
+BattlEvo is a dependency-free browser neural-evolution arcade. Three independently evolving species — **red, green and blue** — receive the same senses, movement rules, projectile physics and evolutionary system. The player changes only the hidden-neuron count for each species, chooses a scenario, and watches different brain sizes learn.
+
+The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step and no runtime library dependency.
+
+## v1 release-candidate rules
+
+- **Hidden neurons:** 1–64 per species. Inputs are validated and the visible controls always show the brain size actually in use.
+- **Network:** 77 inputs → one user-sized hidden layer → 18 outputs.
+- **Population:** 12 creatures per species / 36 total.
+- **Creature, target and Invader speed:** **1.65 px/tick ≈ 99 px/s** at 60 simulation ticks/s.
+- **Projectile speed:** **4.6 px/tick ≈ 276 px/s**, or **2.788× creature speed**.
+- **Sight:** the complete 180° forward half-plane within the combat field. Bunkers occlude sight.
+- **Memory:** once a bunker is seen, its location remains in that creature's 360° remembered terrain map for that episode.
+- **Facing and movement are independent**, each using eight compass directions; movement can also remain still.
+- Species never interbreed.
 
 ## Scenarios
 
-- **Target Practice** — creatures, bunkers and moving targets are repositioned across the arena every generation. Six targets start with six distinct directions drawn from the eight compass headings, preventing a fixed “enemy is up” lesson. Targets never shoot back.
-- **Battlefield Run** — cross a randomly oriented battlefield while arrows travel perpendicular to the route. Trains threat awareness, timing, dodging and remembered cover. Species do not fire in this mode.
-- **Invaders** — randomly oriented Space-Invaders-style defence. Agents move on one axis, face independently, fire, dodge incoming shots and use bunkers. Only the front-most invader in each column can fire. Each logical alien has a separate Red/Green/Blue alive-state, so one species cannot steal another species' training target.
-- **Battle Royale** — red vs green vs blue team combat. Agents recognise their own colour as friendly. Team homes are equidistant and rotate through equivalent map positions between generations.
+### Target Practice
 
-The practice modes deliberately share sensory channels with Battle Royale: moving practice targets, invaders and enemy species all use the same hostile-tracking inputs, while arrows and incoming combat fire use the same projectile inputs. Switching scenarios keeps the evolved populations and generation; **Reset evolution** is the explicit full wipe.
+Creatures, bunkers and moving targets are regenerated across the whole square arena. Six targets begin with six distinct directions sampled from the eight compass headings. All three species receive the **same twelve physical starting positions and facings**, while genotypes are assigned to those starts independently.
+
+Targets never fire back. Firing has a meaningful fitness cost, and after a species hits a target that target becomes unavailable to that species for two seconds. This prevents repeatedly farming one conveniently placed target and creates pressure to search, switch targets and fire selectively.
+
+### Battlefield Run
+
+Cross a randomly oriented battlefield while arrows travel perpendicular to the route. Species do not fire in this mode. Cover is selected from multiple equivalent layout templates, arrow lanes are jittered, and firing intervals vary rather than following one perfectly predictable global rhythm.
+
+Battlefield projectiles use logical per-colour hit state so one species cannot physically shield another from the same training hazard.
+
+### Invaders
+
+A randomly oriented Space-Invaders-style defence. Agents move on one axis, face independently, shoot, dodge incoming fire and use bunkers.
+
+Every Invader has separate Red/Green/Blue logical state. Target survival, front-column firing, hostile projectiles and breach/failure are all independent per species. Red destroying an Invader therefore cannot steal Green's target, and an Invader Red has already destroyed cannot later shoot or cause a breach failure for Red.
+
+### Battle Royale
+
+Red vs Green vs Blue team combat. Creatures recognise their own colour as friendly, cannot damage teammates and use equidistant team homes with rotationally symmetric cover. Living creatures also have simple physical separation so opposing teams cannot collapse into the exact same point.
+
+## Shared combat vocabulary
+
+Practice modes deliberately use the same sensory concepts as Battle Royale:
+
+- moving practice targets, Invaders and hostile species all use the hostile-object channels;
+- battlefield arrows, Invader fire and Battle Royale projectiles all use incoming-projectile channels;
+- velocity is encoded **relative to the creature's current facing** as forward/back and left/right components rather than absolute screen X/Y velocity;
+- cover visibility and remembered cover use the same channels across scenarios.
+
+This makes rotated arenas equivalent and avoids forcing a small brain to reconstruct screen coordinates merely to understand an incoming object.
 
 ## Lifetime scoreboard
 
-Generation-by-generation fitness remains part of evolution internally, but the visible leaderboard is based on accumulated performance across the whole run:
+Generation fitness remains internal to natural selection, but the visible leaderboard is based on accumulated scenario performance:
 
 - **Target Practice:** total hits
 - **Battlefield Run:** total successful crossings
 - **Invaders:** total Invader kills
-- **Battle Royale:** career kill-to-death ratio, with raw kills and deaths shown alongside it
+- **Battle Royale:** raw career K:D with kills and deaths shown
 
-Each scenario keeps its own Red/Green/Blue lifetime records. Switching to another scenario does not erase them; returning later restores that scenario's scoreboard. **Reset evolution** clears both the brains and all lifetime records. The visible **LEADER** badge follows the accumulated scenario statistic instead of a single generation's fitness score.
+Battle Royale's **LEADER** badge does not let a one-kill/zero-death sample win forever. It remains provisional until ten recorded kill/death engagements and uses a lightly smoothed ratio for leader comparison while still displaying the raw K:D to the player.
 
-## Agent rules
+Each scenario also records how many completed rounds contributed to its totals.
 
-- The active combat field is a centred square. Rotating UP / RIGHT / DOWN / LEFT therefore changes direction without changing route length, dodge space or Invader breach distance.
-- Full-field **180° forward vision**. Anything behind the creature is unseen until it turns.
-- Bunkers block both sight and projectiles.
-- Once a bunker has been seen, its location remains in that creature's 360° remembered terrain map for the rest of the episode.
-- Eight facing directions and eight movement directions; facing and movement are independent.
-- All creatures, moving targets and invaders use the same movement speed: **1.65 px/tick ≈ 99 px/s** at 60 simulation ticks/s.
-- Every projectile uses the same speed: **4.6 px/tick ≈ 276 px/s**, about **2.79× creature speed**. It can catch a fleeing creature but remains visible and dodgeable.
-- Species never interbreed.
-- Neural networks have one hidden layer. The player chooses only the hidden-neuron count independently for red, green and blue.
+## Scenario switching
+
+Changing scenario while evolution is running **queues the new scenario for the next generation**. The current round finishes normally, avoiding both accidental abandonment and rerolling an unfavourable arena while keeping already-earned lifetime points.
+
+Brains, generation number and all four lifetime scoreboards persist across scenario changes. **Reset evolution** explicitly wipes the experiment.
+
+## Persistence
+
+BattlEvo uses **IndexedDB** to checkpoint the experiment.
+
+A checkpoint stores:
+
+- all Red/Green/Blue genomes;
+- hidden-neuron widths;
+- generation number;
+- current scenario;
+- completed lifetime records and per-mode round counts.
+
+Saves are generation-safe. If Safari kills or reloads a tab halfway through a round, BattlEvo restores the round from its saved starting checkpoint rather than retaining half a round's hits/kills and counting them again.
+
+A saved experiment appears as **Continue saved experiment**. Restored experiments open paused so the player decides when simulation resumes.
+
+When the page goes into the background, BattlEvo saves and pauses. It deliberately does **not** pretend iOS will continue running the neural simulation in the background or try to catch up hidden-tab time when returning.
 
 ## Evolution fairness
 
-BattlEvo is intended to make brain-size comparisons meaningful rather than accidentally testing spawn luck or initialization bias.
+BattlEvo attempts to make brain-size comparisons meaningful instead of accidentally testing spawn luck, width-dependent signal strength or coordinate-system reconstruction.
 
-- Genotypes are randomly assigned to physical spawn slots each generation so elite index 0 does not inherit a permanently favourable lane.
-- Target Practice randomises creature positions, facing, cover, target positions and target headings across the whole square field.
-- Battlefield arrows can logically hit at most one creature of each colour, so one species cannot act as a physical shield for another in a training run.
-- Invaders provide the same kill opportunities independently to all three species.
-- All directional scenarios are rotated copies of the same square-field geometry.
-- Battle Royale uses equidistant team homes and rotationally symmetric cover.
-- Crossover preserves whole hidden-neuron subcircuits (incoming weights, bias and outgoing weights) instead of independently shredding every weight.
-- Mutation frequency scales sub-linearly with genome size, while mutation amplitude scales with each parameter's own natural weight scale.
-- Initial neural weights use fan-in normalization. A wider hidden layer therefore starts with essentially the same action-signal magnitude as a small one instead of becoming automatically “louder”.
+- Target Practice gives all colours the same twelve physical starts each generation.
+- Battlefield and Invaders give all species the same set of spawn slots; genotype-to-slot assignment is shuffled independently.
+- Practice colours are visually displaced only during rendering, not in simulation physics.
+- All directional scenarios use the same square combat field and rotated-equivalent geometry.
+- Battle Royale homes are equidistant and rotate through equivalent positions.
+- Initial network weights use fan-in scaling.
+- Crossover preserves complete hidden-neuron subcircuits: incoming connections, hidden bias and outgoing connections travel together.
+- Mutation frequency scales sub-linearly with genome size, reducing the old penalty where a wider brain was genetically scrambled simply because it contained more weights.
+- The internal sine/cosine clock starts with a random phase each generation.
 
-## Physics audit
+## Firing balance
 
-The automated gameplay audit currently measures:
+Projectile physics were deliberately **not** changed during the v1 audit. Current automated measurements are:
 
 - projectile / creature speed ratio: **2.788×**
-- reaction time to a stationary shot first noticed 100 px away: **0.362 s**
-- possible perpendicular movement in that time: **35.9 px** (over five creature radii)
-- time for a projectile to catch a creature fleeing directly away from 100 px: **0.565 s**
-- Invader hostile fire density in a deterministic 10-second sample: **27 shots**, or about **2.7 shots/s** across the formation
-- Battlefield starting progress across all four rotations: **identical (0.0467)**
-- Invader breach distance across all four rotations: **identical (412 px)**
+- arrival time for a projectile 100 px away from a stationary target: **0.362 s**
+- possible perpendicular movement during that warning: **35.9 px**, over five creature radii
+- catch time for a projectile starting 100 px behind a creature fleeing directly away: **0.565 s**
+- Battlefield starting progress across all four rotations: **0.0467 in every direction**
+- deterministic Invader hostile fire sample: **25 shots / 10 s per species layer**
 
-These values are intended to make projectiles dangerous and visibly faster without turning dodging into luck.
+The intended result is that bullets cannot simply be outrun, close shots are dangerous, and an early-seen trajectory can still be dodged.
+
+Firing itself is no longer almost free. Target Practice has the strongest missed-shot cost, with smaller costs in Invaders and Battle Royale so evolution has a reason to develop selective shooting rather than permanent spray-and-pray behaviour.
 
 ## Neural fairness audit
 
-A separate statistical test feeds identical sensory probes through many randomly initialized networks with different hidden widths. Current results:
+The statistical initialization audit feeds identical sensory probes into random 4N, 10N, 20N and 64N brains.
 
-- **4 neurons:** output RMS 0.4625; positive fire logit 48.9%
-- **10 neurons:** output RMS 0.4643; positive fire logit 47.9%
-- **20 neurons:** output RMS 0.4625; positive fire logit 50.1%
-- **64 neurons:** output RMS 0.4664; positive fire logit 49.0%
-- total output-RMS spread across 4→64 neurons: **1.009×**
+Current output RMS:
 
-This means different brain sizes begin with comparable signal strength and neutral action bias; the meaningful difference is available neural capacity and how evolution uses it.
+- **4N:** 0.4625
+- **10N:** 0.4643
+- **20N:** 0.4625
+- **64N:** 0.4664
+- total RMS spread: **1.009×**
+
+Using the game's real FIRE threshold of `> 0.15`, initial firing rates are:
+
+- **4N:** 35.4%
+- **10N:** 36.6%
+- **20N:** 38.6%
+- **64N:** 37.2%
+- spread: **3.2 percentage points**
+
+Wider brains therefore do not begin with materially stronger action signals or a radically different chance of firing.
+
+## Performance work
+
+The v1 release candidate reduces main-thread pressure substantially:
+
+- neural hidden/output arrays are reused instead of allocated every brain evaluation;
+- each agent reuses its 77-input, 56-sector and 8-memory sensory buffers;
+- helper functions no longer create a fresh family of closures for every sensory pass;
+- static arena scenery is cached to an offscreen Canvas;
+- HUD DOM updates are throttled instead of rewritten every animation frame;
+- at high simulation speeds rendering is reduced while simulation continues;
+- simulation uses an **8 ms real CPU budget per animation frame**, so 30× is a target rather than permission to freeze the UI for 90 expensive ticks;
+- the UI reports requested vs achieved simulation speed and marks the run **CPU limited** when the device cannot sustain the selected multiplier.
+
+## iPhone / Safari
+
+The mobile design explicitly accounts for Safari:
+
+- `viewport-fit=cover` is paired with `env(safe-area-inset-*)` padding for notch and home-indicator areas;
+- native page scrolling and pinch zoom remain enabled;
+- buttons use normal click semantics rather than mouse-only handlers;
+- on portrait phones the decorative Canvas gutters are cropped so the **600×600 combat field uses the full available width**;
+- landscape restores the full widescreen observation view;
+- running mode has a sticky Pause + speed bar above the arena;
+- Pause has a clear visual overlay;
+- backgrounding explicitly pauses and resets timing on return instead of generating a catch-up burst.
+
+CI now includes a real **Playwright WebKit** interaction test, not just a Chromium phone-sized screenshot. It starts the game, validates invalid neuron values, queues scenario changes, pauses/resumes, saves/reloads/restores through IndexedDB, exercises background handling, resizes portrait→landscape and captures running WebKit screenshots.
+
+A final physical iPhone Safari smoke test is still recommended before removing the release-candidate suffix because headless WebKit cannot reproduce every device-level Safari behaviour.
 
 ## Run locally
 
-No build step and no dependencies are required.
+No runtime dependency or build step is required.
 
 1. Clone or download the repository.
-2. Open `index.html` in Firefox or Chromium.
-
-For a tiny local web server instead:
+2. Open `index.html` directly, or run:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000`.
+and open `http://localhost:8000`.
 
 ## GitHub Pages
 
-The repository publishes directly from **`main` / root**. Because the game is plain HTML/CSS/JavaScript, no Pages build workflow is required. The root `.nojekyll` file makes the static publishing intent explicit.
+The repository publishes directly from **`main` / root**. `.nojekyll` keeps it as a plain static Pages site.
 
-## iPhone / mobile
+## Automated release audit
 
-The mobile layout keeps the three brain-size controls compact before starting. Once evolution begins, the arena moves above the settings so it is easier to watch without scrolling through the setup panel first. Safari page scrolling and pinch zoom remain enabled, with the viewport explicitly allowing zoom from **50% to 500%**. Landscape orientation gives the largest practical arena on a phone.
+GitHub Actions runs:
 
-## Automated audit
+- syntax checks for every runtime and test file;
+- the exact production script order;
+- complete generation rollover in all four scenarios;
+- 180° sight, bunker occlusion and remembered terrain;
+- facing-relative velocity sensing;
+- projectile/creature speed balance;
+- Target shot cost and anti-farming cooldown;
+- matched Target Practice starts plus all-quadrant/all-heading randomisation;
+- Battlefield rotational fairness, timing and anti-shielding;
+- independent Invader targets, hostile fire and breach layers;
+- Battle Royale friendly-fire prevention and body separation;
+- lifetime hit/cross/kill/K:D accounting;
+- 4/10/20/64-neuron initialization fairness at the actual firing threshold;
+- a multi-generation deterministic spectator playtest;
+- Chromium desktop rendering;
+- interactive WebKit mobile/landscape behaviour and persistence.
 
-The GitHub Actions audit includes:
-
-- JavaScript syntax checks
-- runtime smoke tests and complete generation rollover in all four scenarios
-- 180° sight, bunker occlusion and remembered terrain
-- projectile/creature speed balance
-- rotational fairness for Battlefield and Invaders
-- friendly-fire prevention
-- independent Invader targets per species
-- Battlefield anti-shielding behaviour
-- Invader bullet-density limits
-- scenario switching without resetting evolved brains
-- Target Practice all-quadrant/all-heading randomisation checks
-- lifetime hit/cross/kill/K:D event accounting
-- statistical 4/10/20/64-neuron initialization fairness
-- desktop **and phone** headless screenshots for visual review
-
-Run the audits locally with:
+Core Node audits can be run locally with:
 
 ```bash
 node tests/smoke.js
@@ -124,8 +215,11 @@ node tests/audit.js
 node tests/neural-fairness.js
 node tests/target-randomization.js
 node tests/lifetime-scoreboard.js
+node tests/long-run.js
 ```
+
+The WebKit test additionally requires Playwright and is intended primarily for CI.
 
 ## Current version
 
-**v0.2.4** — accumulated species scoreboards, direction-neutral Target Practice and mobile-friendly game UI.
+**v1.0.0-rc.1** — senior QA release-candidate pass covering persistence, gameplay fairness, firing balance, performance, UI/UX and WebKit/iPhone behaviour.
