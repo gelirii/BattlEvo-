@@ -1,7 +1,7 @@
 'use strict';
 
-// BattlEvo v1.0.0 release candidate — dependency-free neural evolution arcade.
-const GAME_VERSION='v1.0.0-rc.1';
+// BattlEvo v1.0.0 RC2 — stress-test release candidate.
+const GAME_VERSION='v1.0.0-rc.2';
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
@@ -12,7 +12,8 @@ const SPECIES=[
   {id:'green',color:'#45e06f',pale:'#a8f5bc'},
   {id:'blue',color:'#4f8cff',pale:'#a9c7ff'}
 ];
-const POP_SIZE=12;
+const POP_SIZE=16;
+const TRIALS_PER_GENERATION=2;
 const MIN_HIDDEN=1,MAX_HIDDEN=64;
 const AGENT_SPEED=1.65;
 const PROJECTILE_SPEED=4.6;
@@ -102,6 +103,12 @@ function evolvePopulation(pop){
   while(next.length<POP_SIZE){const a=pool[randi(pool.length)],b=pool[randi(pool.length)];next.push({brain:Brain.child(a.brain,b.brain),fitness:0,best:Math.max(a.best,b.best)});}
   return next;
 }
+function expandRestoredPopulation(pop){
+  if(pop.length>POP_SIZE)return pop.slice(0,POP_SIZE);
+  const parents=[...pop].sort((a,b)=>(b.best+b.fitness)-(a.best+a.fitness)).slice(0,Math.max(2,Math.ceil(pop.length/2)));
+  while(pop.length<POP_SIZE){const a=parents[randi(parents.length)],b=parents[randi(parents.length)];pop.push({brain:Brain.child(a.brain,b.brain),fitness:0,best:Math.max(a.best,b.best)});}
+  return pop;
+}
 
 class Agent{
   constructor(species,genotype,idx,x,y,facing=0){
@@ -116,7 +123,7 @@ function newBunker(x,y,w=55,h=35,id=null){return{id:id||'b'+Math.random().toStri
 function readBrainSize(id,fallback){const el=document.getElementById(id),n=Number(el&&el.value);return Number.isFinite(n)?clamp(Math.round(n),MIN_HIDDEN,MAX_HIDDEN):fallback;}
 function blankRounds(){return{target:0,battlefield:0,invaders:0,royale:0};}
 
-function createSimulation(mode,generation=1){return{mode,generation,tick:0,orientation:0,agents:[],projectiles:[],bunkers:[],targets:[],invaders:[],arrows:[],populations:{},bestEver:{red:-Infinity,green:-Infinity,blue:-Infinity},winner:null,endReason:'',lastSummary:'No completed rounds yet.',invaderCleared:{red:false,green:false,blue:false},lifetime:makeLifetimeStats(),lifetimeRounds:blankRounds(),roundLifetimeBaseline:null,pendingMode:null,clockPhase:Math.random()*TAU,battlefieldLanes:[],nextArrowTick:0};}
+function createSimulation(mode,generation=1){return{mode,generation,trial:1,tick:0,orientation:0,agents:[],projectiles:[],bunkers:[],targets:[],invaders:[],arrows:[],populations:{},bestEver:{red:-Infinity,green:-Infinity,blue:-Infinity},winner:null,endReason:'',lastSummary:'No completed rounds yet.',invaderCleared:{red:false,green:false,blue:false},invaderBreached:{red:false,green:false,blue:false},lifetime:makeLifetimeStats(),lifetimeRounds:blankRounds(),roundLifetimeBaseline:null,pendingMode:null,clockPhase:Math.random()*TAU,battlefieldLanes:[],nextArrowTick:0};}
 
 function initSimulation(){
   const h={red:readBrainSize('brain-red',4),green:readBrainSize('brain-green',10),blue:readBrainSize('brain-blue',20)};
@@ -127,22 +134,24 @@ function initSimulation(){
 }
 
 function restoreSimulation(snapshot){
-  if(!snapshot||snapshot.schema!==1)throw new Error('Unsupported BattlEvo save data.');
+  if(!snapshot||![1,2].includes(snapshot.schema))throw new Error('Unsupported BattlEvo save data.');
   selectedMode=MODE_CONFIG[snapshot.mode]?snapshot.mode:'target';
   sim=createSimulation(selectedMode,Math.max(1,Number(snapshot.generation)||1));
+  sim.trial=clamp(Math.round(Number(snapshot.trial)||1),1,TRIALS_PER_GENERATION);
   sim.lifetime=snapshot.lifetime||makeLifetimeStats();
   sim.lifetimeRounds=Object.assign(blankRounds(),snapshot.lifetimeRounds||{});
   sim.bestEver=Object.assign({red:-Infinity,green:-Infinity,blue:-Infinity},snapshot.bestEver||{});
   for(const s of SPECIES){
     const rows=snapshot.populations&&snapshot.populations[s.id];
-    if(!Array.isArray(rows)||rows.length!==POP_SIZE)throw new Error('Saved population is incomplete.');
-    sim.populations[s.id]=rows.map(row=>({brain:new Brain(clamp(Math.round(row.hidden),MIN_HIDDEN,MAX_HIDDEN),row.genome),fitness:0,best:Number(row.best)||0}));
+    if(!Array.isArray(rows)||rows.length<2)throw new Error('Saved population is incomplete.');
+    const restored=rows.map(row=>({brain:new Brain(clamp(Math.round(row.hidden),MIN_HIDDEN,MAX_HIDDEN),row.genome),fitness:Number(row.fitness)||0,best:Number(row.best)||0}));
+    sim.populations[s.id]=expandRestoredPopulation(restored);
   }
   setupGeneration();setRunningUI(true);paused=true;
 }
 
 function setupGeneration(){
-  sim.tick=0;sim.projectiles=[];sim.arrows=[];sim.targets=[];sim.invaders=[];sim.bunkers=[];sim.agents=[];sim.winner=null;sim.endReason='';sim.invaderCleared={red:false,green:false,blue:false};sim.clockPhase=Math.random()*TAU;
+  sim.tick=0;sim.projectiles=[];sim.arrows=[];sim.targets=[];sim.invaders=[];sim.bunkers=[];sim.agents=[];sim.winner=null;sim.endReason='';sim.invaderCleared={red:false,green:false,blue:false};sim.invaderBreached={red:false,green:false,blue:false};sim.clockPhase=Math.random()*TAU;
   sim.orientation=randi(4);
   if(sim.mode==='target')setupTarget();
   else if(sim.mode==='battlefield')setupBattlefield();
@@ -177,7 +186,7 @@ function setupInvaders(){
   sim.bunkers=layout.map((b,i)=>orientedRect(FIELD.left+b[0],b[1],b[2],b[3],o,'I'+(i+1)));
   spawnSpeciesAgents((s,slot)=>{const baseX=FIELD.left+35+slot*((FIELD.size-70)/(POP_SIZE-1)),p=orientedPoint(baseX,FIELD.bottom-35,o);return{x:p.x,y:p.y,facing:orientedFacing(6,o)};});
   for(let r=0;r<3;r++)for(let c=0;c<7;c++){
-    const p=orientedPoint(FIELD.left+90+c*70,70+r*45,o),initial=60+((r*29+c*43+sim.generation*13)%120);
+    const p=orientedPoint(FIELD.left+90+c*70,70+r*45,o),initial=60+((r*29+c*43+sim.generation*13+sim.trial*7)%120);
     sim.invaders.push({x:p.x,y:p.y,r:9,row:r,col:c,alive:true,aliveFor:{red:true,green:true,blue:true},shuffle:1,fireClockFor:{red:initial,green:initial,blue:initial},fireCountFor:{red:0,green:0,blue:0},flash:0,vx:0,vy:0});
   }
 }
@@ -188,5 +197,5 @@ function setupRoyale(){
   sim.bunkers.push(newBunker(FIELD.cx-34,FIELD.cy-34,68,68,'RC'));
   const phase=randi(6)*TAU/6,homes={};
   SPECIES.forEach((s,i)=>{const a=phase+i*TAU/3,x=FIELD.cx+Math.cos(a)*230,y=FIELD.cy+Math.sin(a)*230;homes[s.id]={x,y,f:vecToDir(FIELD.cx-x,FIELD.cy-y)};});
-  spawnSpeciesAgents((s,slot)=>{const h=homes[s.id],angle=slot/POP_SIZE*TAU,rad=18+(slot%3)*8;return{x:h.x+Math.cos(angle)*rad,y:h.y+Math.sin(angle)*rad,facing:h.f};});
+  spawnSpeciesAgents((s,slot)=>{const h=homes[s.id],angle=slot/POP_SIZE*TAU,rad=22+(slot%4)*9;return{x:h.x+Math.cos(angle)*rad,y:h.y+Math.sin(angle)*rad,facing:h.f};});
 }
