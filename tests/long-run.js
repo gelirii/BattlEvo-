@@ -41,4 +41,4 @@ const agent=ev('sim.agents[0]'),input1=ev('buildInputs(sim.agents[0])'),input2=e
 const heavyStart=process.hrtime.bigint();for(let i=0;i<240;i++)ev('step();');const heavyMs=Number(process.hrtime.bigint()-heavyStart)/1e6;assert.ok(ev('sim.agents.every(a=>Number.isFinite(a.fitness))'));
 reports.all64Royale={population:'16×3',trialsPerGeneration:TRIALS_PER_GENERATION,royaleMaxSeconds:MAX_TICKS.royale/60,ticks:240,ms:+heavyMs.toFixed(1),ticksPerSecond:+(240/(heavyMs/1000)).toFixed(0),realtimeMultiple:+((240/(heavyMs/1000))/60).toFixed(1)};
 
-console.log('BattlEvo RC3 multi-generation stress playtest passed.');console.log(JSON.stringify(reports,null,2));
+console.log('BattlEvo RC5 multi-generation stress playtest passed.');console.log(JSON.stringify(reports,null,2));
