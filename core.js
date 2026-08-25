@@ -1,7 +1,7 @@
 'use strict';
 
-// BattlEvo v1.0.0 RC5 — tactical-screen perception release candidate.
-const GAME_VERSION='v1.0.0-rc.5';
+// BattlEvo v1.0.0 RC6 — tactical visibility + continuous aiming release candidate.
+const GAME_VERSION='v1.0.0-rc.6';
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
@@ -22,7 +22,8 @@ const FIELD_SIZE=H;
 const FIELD={left:(W-FIELD_SIZE)/2,right:(W+FIELD_SIZE)/2,top:0,bottom:H,size:FIELD_SIZE,cx:W/2,cy:H/2};
 
 // Structured top-down tactical view. Static cover and actor tables are complete;
-// projectile tables prioritise the closest currently visible shots to bound MLP size.
+// projectile tables prioritise the closest semantically relevant shots to bound MLP size.
+// Dynamic-slot state is line-of-sight visibility: occluded objects keep their coordinates.
 const TACTICAL_SLOTS={bunkers:6,friends:15,enemies:32,friendlyProjectiles:12,enemyProjectiles:24};
 const SELF_INPUTS=13,ACTOR_INPUTS=8,PROJECTILE_INPUTS=5,BUNKER_INPUTS=5;
 const INPUTS=SELF_INPUTS
@@ -34,10 +35,10 @@ const INPUTS=SELF_INPUTS
 const OUTPUTS=18;
 const MAX_TICKS={target:1800,battlefield:1500,invaders:1800,royale:3600};
 const MODE_CONFIG={
-  target:{name:'Target Practice',icon:'◎',brief:'Targets are the only enemies. Each creature sees its own shots, ignores every creature colour, and uses a 360° tactical view with bunker occlusion.'},
-  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield with fresh random cover. Teammates are visible; other species are absent; battlefield arrows are hostile projectiles.'},
-  invaders:{name:'Invaders',icon:'▦',brief:'Invaders are enemies, teammates are friends, and each species sees only its own friendly fire plus the Invader fire aimed at it.'},
-  royale:{name:'Battle Royale',icon:'✦',brief:'Teammates and their shots are friendly; both other colours and their shots are enemies. Bunkers occlude dynamic objects, never static map knowledge.'}
+  target:{name:'Target Practice',icon:'◎',brief:'Targets are the only enemies. Each creature knows target positions even behind cover, gets a clear-shot visibility bit, sees only its own shots, and ignores every creature colour.'},
+  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield with fresh random cover. Teammates are known, other species are absent, and battlefield arrows are hostile projectiles with cover visibility.'},
+  invaders:{name:'Invaders',icon:'▦',brief:'Invaders are enemies, teammates are friends, and each species knows relevant actor/projectile positions while cover marks whether each has a clear line of sight.'},
+  royale:{name:'Battle Royale',icon:'✦',brief:'Teammates and their shots are friendly; both other colours and their shots are enemies. Cover hides line of sight, not location, and aiming is continuous through 360°.'}
 };
 const MODE_NAMES=Object.fromEntries(Object.entries(MODE_CONFIG).map(([k,v])=>[k,v.name]));
 const SHOT_COST={target:0.5,battlefield:0,invaders:0.12,royale:0.1};
@@ -120,7 +121,8 @@ function expandRestoredPopulation(pop){
 
 class Agent{
   constructor(species,genotype,idx,x,y,facing=0){
-    this.species=species;this.genotype=genotype;this.idx=idx;this.x=x;this.y=y;this.facing=facing;
+    const initialAim=DIRS[facing]||DIRS[0];
+    this.species=species;this.genotype=genotype;this.idx=idx;this.x=x;this.y=y;this.facing=facing;this.aimX=initialAim.x;this.aimY=initialAim.y;
     this.moveDir=-1;this.alive=true;this.health=1;this.cooldown=0;this.fitness=0;this.hits=0;this.kills=0;this.shots=0;
     this.finished=false;this.flash=0;this.lastX=x;this.lastY=y;this.deathTick=null;
     this.inputBuffer=new Float32Array(INPUTS);

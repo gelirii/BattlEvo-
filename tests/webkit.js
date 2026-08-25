@@ -11,14 +11,15 @@ const {webkit}=require('playwright');
   await page.goto('http://127.0.0.1:8000/',{waitUntil:'load'});
   await page.evaluate(()=>clearSavedExperiment());
 
-  assert.ok((await page.textContent('#version-badge')).includes('v1.0.0-rc.5'));
+  assert.ok((await page.textContent('#version-badge')).includes('v1.0.0-rc.6'));
   await page.fill('#brain-red','5000000');await page.fill('#brain-green','0');await page.fill('#brain-blue','20');
   await page.click('#start');await page.waitForTimeout(150);
   assert.strictEqual(await page.inputValue('#brain-red'),'64');assert.strictEqual(await page.inputValue('#brain-green'),'1');
   assert.ok(await page.evaluate(()=>document.body.classList.contains('running')));
-  assert.strictEqual(await page.evaluate(()=>sim.agents.length),48,'RC5 did not start 16 creatures/species');
+  assert.strictEqual(await page.evaluate(()=>sim.agents.length),48,'RC6 did not start 16 creatures/species');
   assert.strictEqual(await page.evaluate(()=>INPUTS),599);assert.strictEqual(await page.evaluate(()=>sim.agents[0].inputBuffer.length),599);
-  assert.strictEqual(await page.evaluate(()=>typeof inFront),'undefined');assert.strictEqual(await page.evaluate(()=>typeof rememberVisibleBunkers),'undefined');
+  assert.strictEqual(await page.evaluate(()=>typeof inFront),'undefined');assert.strictEqual(await page.evaluate(()=>typeof rememberVisibleBunkers),'undefined');assert.strictEqual(await page.evaluate(()=>typeof aimVectorFromOutputs),'function');
+  const aimAngle=await page.evaluate(()=>{const o=new Float32Array(18);o.fill(-12);o[9]=0;o[10]=0;const a=aimVectorFromOutputs(o);return Math.atan2(a.y,a.x);});assert.ok(Math.abs(aimAngle-Math.PI/8)<.002,'continuous aiming regressed in WebKit');
   assert.strictEqual((await page.textContent('#hud-pop')).trim(),'16 × 3');
   assert.ok((await page.textContent('#hud-gen')).includes('T1/4'));
   assert.strictEqual(await page.evaluate(()=>TRIALS_PER_GENERATION),4);assert.strictEqual(await page.evaluate(()=>MAX_TICKS.royale),3600);
@@ -67,5 +68,5 @@ const {webkit}=require('playwright');
 
   await page.screenshot({path:'battlevo-webkit-landscape.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'battlevo-webkit-phone.png',fullPage:true});
   assert.deepStrictEqual(errors,[],`WebKit page errors: ${errors.join('\n')}`);
-  await browser.close();console.log('BattlEvo RC5 WebKit interaction audit passed.');
+  await browser.close();console.log('BattlEvo RC6 WebKit interaction audit passed.');
 })().catch(err=>{console.error(err);process.exit(1);});
