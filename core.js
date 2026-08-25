@@ -1,7 +1,7 @@
 'use strict';
 
-// BattlEvo v1.0.0 RC3 — persistent species-state release candidate.
-const GAME_VERSION='v1.0.0-rc.3';
+// BattlEvo v1.0.0 RC4 — random-cover release candidate.
+const GAME_VERSION='v1.0.0-rc.4';
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
@@ -26,9 +26,9 @@ const OUTPUTS=18;
 const MAX_TICKS={target:1800,battlefield:1500,invaders:1800,royale:3600};
 const MODE_CONFIG={
   target:{name:'Target Practice',icon:'◎',brief:'Random positions, random cover and moving targets. Learn to find, track, switch and lead worthwhile targets in any direction.'},
-  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield while arrows travel at 90° to the route. Survive, remember cover and learn when not to move.'},
-  invaders:{name:'Invaders',icon:'▦',brief:'Defend the marked edge. Move on one axis, face freely, clear your own logical wave and dodge return fire.'},
-  royale:{name:'Battle Royale',icon:'✦',brief:'Red, Green and Blue fight as teams. Friends are friendly; damage, kills, survival and team victory drive evolution. A round may run for up to 60 seconds.'}
+  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield with fresh random cover while arrows travel at 90° to the route. Survive, remember cover and learn when not to move.'},
+  invaders:{name:'Invaders',icon:'▦',brief:'Defend the marked edge with fresh random cover. Move on one axis, face freely, clear your own logical wave and dodge return fire.'},
+  royale:{name:'Battle Royale',icon:'✦',brief:'Red, Green and Blue fight as teams with fresh symmetric random cover. Friends are friendly; damage, kills, survival and team victory drive evolution. A round may run for up to 60 seconds.'}
 };
 const MODE_NAMES=Object.fromEntries(Object.entries(MODE_CONFIG).map(([k,v])=>[k,v.name]));
 const SHOT_COST={target:0.5,battlefield:0,invaders:0.12,royale:0.1};
@@ -120,6 +120,51 @@ class Agent{
 }
 
 function newBunker(x,y,w=55,h=35,id=null){return{id:id||'b'+Math.random().toString(36).slice(2),x,y,w,h,hp:1};}
+function rectOverlap(a,b,pad=0){return a.x-pad<b.x+b.w+pad&&a.x+a.w+pad>b.x-pad&&a.y-pad<b.y+b.h+pad&&a.y+a.h+pad>b.y-pad;}
+function bunkerInsideField(b,edge=0){return b.x>=FIELD.left+edge&&b.y>=FIELD.top+edge&&b.x+b.w<=FIELD.right-edge&&b.y+b.h<=FIELD.bottom-edge;}
+function objectRadius(o){return Number.isFinite(o?.r)?o.r:AGENT_R;}
+function bunkerClearOfObjects(b,objects,clearance=0){return objects.every(o=>!rectCircleHit(b,o,objectRadius(o)+clearance));}
+function placeRandomBunkers(count,{prefix='B',orientation=0,minSize=44,maxSize=82,edgeMargin=28,gap=30,clearance=16,avoid=[],zone=null}={}){
+  const z=zone||{left:FIELD.left+edgeMargin,right:FIELD.right-edgeMargin,top:FIELD.top+edgeMargin,bottom:FIELD.bottom-edgeMargin};
+  for(let restart=0;restart<60;restart++){
+    const out=[];
+    for(let i=0;i<count;i++){
+      let placed=false;
+      for(let tries=0;tries<500&&!placed;tries++){
+        const w=Math.round(rand(maxSize,minSize)),h=Math.round(rand(maxSize,minSize));
+        if(z.right-z.left<w||z.bottom-z.top<h)continue;
+        const x=rand(z.right-w,z.left),y=rand(z.bottom-h,z.top),b=orientedRect(x,y,w,h,orientation,prefix+(i+1));
+        if(!bunkerInsideField(b,edgeMargin))continue;
+        if(out.some(o=>rectOverlap(b,o,gap)))continue;
+        if(!bunkerClearOfObjects(b,avoid,clearance))continue;
+        out.push(b);placed=true;
+      }
+      if(!placed)break;
+    }
+    if(out.length===count)return out;
+  }
+  throw new Error(`Could not place ${count} legal ${prefix} bunkers.`);
+}
+function placeRoyaleBunkers(){
+  const avoid=sim.agents;
+  for(let restart=0;restart<80;restart++){
+    const out=[];
+    for(let ring=0;ring<2;ring++){
+      let placed=false;
+      for(let tries=0;tries<300&&!placed;tries++){
+        const size=Math.round(rand(68,46)),radius=rand(ring?175:135,ring?135:95),phase=rand(TAU/3,0),triplet=[];
+        for(let k=0;k<3;k++){const a=phase+k*TAU/3,cx=FIELD.cx+Math.cos(a)*radius,cy=FIELD.cy+Math.sin(a)*radius;triplet.push(newBunker(cx-size/2,cy-size/2,size,size,`R${ring*3+k+1}`));}
+        if(triplet.some(b=>!bunkerInsideField(b,30)||!bunkerClearOfObjects(b,avoid,18)))continue;
+        if(triplet.some((b,i)=>triplet.some((o,j)=>i!==j&&rectOverlap(b,o,28))))continue;
+        if(triplet.some(b=>out.some(o=>rectOverlap(b,o,28))))continue;
+        out.push(...triplet);placed=true;
+      }
+      if(!placed)break;
+    }
+    if(out.length===6)return out;
+  }
+  throw new Error('Could not place legal symmetric Battle Royale cover.');
+}
 function readBrainSize(id,fallback){const el=document.getElementById(id),n=Number(el&&el.value);return Number.isFinite(n)?clamp(Math.round(n),MIN_HIDDEN,MAX_HIDDEN):fallback;}
 function blankRounds(){return{target:0,battlefield:0,invaders:0,royale:0};}
 
@@ -167,37 +212,30 @@ function spawnSpeciesAgents(spawnFn){
   for(const s of SPECIES){const pop=sim.populations[s.id],slots=shuffledIndices(POP_SIZE);pop.forEach((g,i)=>{const p=spawnFn(s,slots[i]);sim.agents.push(new Agent(s,g,i,p.x,p.y,p.facing===undefined?randi(8):p.facing));});}
 }
 
-const BATTLEFIELD_LAYOUTS=[
-  [[70,145,76,36],[365,245,88,38],[190,390,72,36],[455,455,70,36]],
-  [[105,105,66,42],[390,180,76,42],[255,330,90,34],[75,455,78,38]],
-  [[430,105,78,36],[155,210,82,38],[365,350,72,46],[115,455,70,34]]
-];
 function setupBattlefield(){
-  const o=sim.orientation,layout=BATTLEFIELD_LAYOUTS[randi(BATTLEFIELD_LAYOUTS.length)];
-  sim.bunkers=layout.map((b,i)=>orientedRect(FIELD.left+b[0],b[1],b[2],b[3],o,'B'+(i+1)));
-  const facings=Array.from({length:POP_SIZE},()=>orientedFacing(6,o));
+  const o=sim.orientation,facings=Array.from({length:POP_SIZE},()=>orientedFacing(6,o));
   spawnSpeciesAgents((s,slot)=>{const baseX=FIELD.left+32+slot*((FIELD.size-64)/(POP_SIZE-1)),p=orientedPoint(baseX,FIELD.bottom-28,o);return{x:p.x,y:p.y,facing:facings[slot]};});
+  sim.bunkers=placeRandomBunkers(4,{prefix:'B',orientation:o,minSize:46,maxSize:82,edgeMargin:30,gap:34,clearance:18,avoid:sim.agents});
   sim.battlefieldLanes=Array.from({length:8},(_,i)=>clamp(55+i*70+randi(21)-10,42,558));
   sim.nextArrowTick=22+randi(20);
 }
 
-const INVADER_BUNKER_LAYOUTS=[[[75,400,86,34],[257,400,86,34],[439,400,86,34]],[[55,395,105,34],[247,425,105,34],[440,395,105,34]],[[95,420,75,38],[260,380,80,38],[430,420,75,38]]];
 function invaderFireSeed(row,col,count,generation){return 90+((row*31+col*47+count*53+generation*17)%120);}
 function setupInvaders(){
-  const o=sim.orientation,layout=INVADER_BUNKER_LAYOUTS[randi(INVADER_BUNKER_LAYOUTS.length)];
-  sim.bunkers=layout.map((b,i)=>orientedRect(FIELD.left+b[0],b[1],b[2],b[3],o,'I'+(i+1)));
+  const o=sim.orientation;
   spawnSpeciesAgents((s,slot)=>{const baseX=FIELD.left+35+slot*((FIELD.size-70)/(POP_SIZE-1)),p=orientedPoint(baseX,FIELD.bottom-35,o);return{x:p.x,y:p.y,facing:orientedFacing(6,o)};});
   for(let r=0;r<3;r++)for(let c=0;c<7;c++){
     const p=orientedPoint(FIELD.left+90+c*70,70+r*45,o),initial=60+((r*29+c*43+sim.generation*13+sim.trial*7)%120);
     sim.invaders.push({x:p.x,y:p.y,r:9,row:r,col:c,alive:true,aliveFor:{red:true,green:true,blue:true},shuffle:1,fireClockFor:{red:initial,green:initial,blue:initial},fireCountFor:{red:0,green:0,blue:0},flash:0,vx:0,vy:0});
   }
+  const zone={left:FIELD.left+45,right:FIELD.right-45,top:FIELD.top+300,bottom:FIELD.top+470};
+  sim.bunkers=placeRandomBunkers(3,{prefix:'I',orientation:o,minSize:52,maxSize:88,edgeMargin:30,gap:34,clearance:16,avoid:[...sim.agents,...sim.invaders],zone});
 }
 
 function setupRoyale(){
   sim.orientation=0;sim.bunkers=[];
-  for(let i=0;i<6;i++){const a=i*TAU/6,cx=FIELD.cx+Math.cos(a)*155,cy=FIELD.cy+Math.sin(a)*155;sim.bunkers.push(newBunker(cx-27,cy-27,54,54,'R'+(i+1)));}
-  sim.bunkers.push(newBunker(FIELD.cx-34,FIELD.cy-34,68,68,'RC'));
   const phase=randi(6)*TAU/6,homes={};
   SPECIES.forEach((s,i)=>{const a=phase+i*TAU/3,x=FIELD.cx+Math.cos(a)*230,y=FIELD.cy+Math.sin(a)*230;homes[s.id]={x,y,f:vecToDir(FIELD.cx-x,FIELD.cy-y)};});
   spawnSpeciesAgents((s,slot)=>{const h=homes[s.id],angle=slot/POP_SIZE*TAU,rad=22+(slot%4)*9;return{x:h.x+Math.cos(angle)*rad,y:h.y+Math.sin(angle)*rad,facing:h.f};});
+  sim.bunkers=placeRoyaleBunkers();
 }
