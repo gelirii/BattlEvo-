@@ -28,7 +28,7 @@ function drawBunkers(){for(const b of sim.bunkers){ctx.fillStyle='#8d7653';ctx.f
 function visualOffset(species){if(sim?.mode==='royale')return{x:0,y:0};const i=SPECIES.findIndex(s=>s.id===species.id);return i===0?{x:-3,y:-3}:i===1?{x:0,y:3}:{x:3,y:-3};}
 function drawAgent(a){
   if(a.finished)return;if(!a.alive&&a.deathTick!==null&&sim.tick-a.deathTick>150)return;
-  const s=a.species,d=DIRS[a.facing],vo=visualOffset(s);ctx.save();ctx.translate(a.x+vo.x,a.y+vo.y);let alpha=1;if(!a.alive){const age=Math.max(0,sim.tick-(a.deathTick??sim.tick));alpha=clamp(.48-age/360,.08,.48);}ctx.globalAlpha=alpha;
+  const s=a.species,base=DIRS[a.facing]||DIRS[0],len=Math.hypot(a.aimX||0,a.aimY||0),d=len>1e-6?{x:a.aimX/len,y:a.aimY/len}:base,vo=visualOffset(s);ctx.save();ctx.translate(a.x+vo.x,a.y+vo.y);let alpha=1;if(!a.alive){const age=Math.max(0,sim.tick-(a.deathTick??sim.tick));alpha=clamp(.48-age/360,.08,.48);}ctx.globalAlpha=alpha;
   ctx.fillStyle=a.flash?s.pale:s.color;ctx.beginPath();ctx.arc(0,0,AGENT_R,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(d.x*12,d.y*12);ctx.stroke();
   if(sim.mode==='royale'&&a.alive){ctx.strokeStyle='rgba(255,255,255,.72)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,AGENT_R+3,-Math.PI/2,-Math.PI/2+TAU*clamp(a.health,0,1));ctx.stroke();}ctx.restore();
 }
