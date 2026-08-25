@@ -1,7 +1,7 @@
 'use strict';
 
-// BattlEvo v1.0.0 RC2 — stress-test release candidate.
-const GAME_VERSION='v1.0.0-rc.2';
+// BattlEvo v1.0.0 RC3 — persistent species-state release candidate.
+const GAME_VERSION='v1.0.0-rc.3';
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
@@ -13,7 +13,7 @@ const SPECIES=[
   {id:'blue',color:'#4f8cff',pale:'#a9c7ff'}
 ];
 const POP_SIZE=16;
-const TRIALS_PER_GENERATION=2;
+const TRIALS_PER_GENERATION=4;
 const MIN_HIDDEN=1,MAX_HIDDEN=64;
 const AGENT_SPEED=1.65;
 const PROJECTILE_SPEED=4.6;
@@ -23,12 +23,12 @@ const FIELD={left:(W-FIELD_SIZE)/2,right:(W+FIELD_SIZE)/2,top:0,bottom:H,size:FI
 const SIGHT_RANGE=Math.hypot(FIELD_SIZE,FIELD_SIZE)+1;
 const INPUTS=77;
 const OUTPUTS=18;
-const MAX_TICKS={target:1800,battlefield:1500,invaders:1800,royale:2100};
+const MAX_TICKS={target:1800,battlefield:1500,invaders:1800,royale:3600};
 const MODE_CONFIG={
   target:{name:'Target Practice',icon:'◎',brief:'Random positions, random cover and moving targets. Learn to find, track, switch and lead worthwhile targets in any direction.'},
   battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield while arrows travel at 90° to the route. Survive, remember cover and learn when not to move.'},
   invaders:{name:'Invaders',icon:'▦',brief:'Defend the marked edge. Move on one axis, face freely, clear your own logical wave and dodge return fire.'},
-  royale:{name:'Battle Royale',icon:'✦',brief:'Red, Green and Blue fight as teams. Friends are friendly; damage, kills, survival and team victory drive evolution.'}
+  royale:{name:'Battle Royale',icon:'✦',brief:'Red, Green and Blue fight as teams. Friends are friendly; damage, kills, survival and team victory drive evolution. A round may run for up to 60 seconds.'}
 };
 const MODE_NAMES=Object.fromEntries(Object.entries(MODE_CONFIG).map(([k,v])=>[k,v.name]));
 const SHOT_COST={target:0.5,battlefield:0,invaders:0.12,royale:0.1};
@@ -133,19 +133,21 @@ function initSimulation(){
   if(typeof saveExperiment==='function')saveExperiment();
 }
 
-function restoreSimulation(snapshot){
-  if(!snapshot||![1,2].includes(snapshot.schema))throw new Error('Unsupported BattlEvo save data.');
-  selectedMode=MODE_CONFIG[snapshot.mode]?snapshot.mode:'target';
-  sim=createSimulation(selectedMode,Math.max(1,Number(snapshot.generation)||1));
-  sim.trial=clamp(Math.round(Number(snapshot.trial)||1),1,TRIALS_PER_GENERATION);
+function restoreSimulation(snapshot,modeOverride=selectedMode){
+  if(!snapshot||![1,2,3].includes(snapshot.schema))throw new Error('Unsupported BattlEvo save data.');
+  const restoredMode=MODE_CONFIG[modeOverride]?modeOverride:(MODE_CONFIG[snapshot.mode]?snapshot.mode:'target');
+  selectedMode=restoredMode;
+  sim=createSimulation(restoredMode,Math.max(1,Number(snapshot.generation)||1));
+  sim.trial=1;
   sim.lifetime=snapshot.lifetime||makeLifetimeStats();
   sim.lifetimeRounds=Object.assign(blankRounds(),snapshot.lifetimeRounds||{});
   sim.bestEver=Object.assign({red:-Infinity,green:-Infinity,blue:-Infinity},snapshot.bestEver||{});
   for(const s of SPECIES){
     const rows=snapshot.populations&&snapshot.populations[s.id];
     if(!Array.isArray(rows)||rows.length<2)throw new Error('Saved population is incomplete.');
-    const restored=rows.map(row=>({brain:new Brain(clamp(Math.round(row.hidden),MIN_HIDDEN,MAX_HIDDEN),row.genome),fitness:Number(row.fitness)||0,best:Number(row.best)||0}));
+    const restored=rows.map(row=>({brain:new Brain(clamp(Math.round(row.hidden),MIN_HIDDEN,MAX_HIDDEN),row.genome),fitness:0,best:Number(row.best)||0}));
     sim.populations[s.id]=expandRestoredPopulation(restored);
+    for(const g of sim.populations[s.id])g.fitness=0;
   }
   setupGeneration();setRunningUI(true);paused=true;
 }
