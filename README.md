@@ -4,11 +4,12 @@ BattlEvo is a dependency-free browser neural-evolution arcade. Three independent
 
 The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step and no runtime library dependency.
 
-## v1 release-candidate rules
+## v1 RC2 stress-test rules
 
 - **Hidden neurons:** 1–64 per species. Inputs are validated and the visible controls always show the brain size actually in use.
 - **Network:** 77 inputs → one user-sized hidden layer → 18 outputs.
-- **Population:** 12 creatures per species / 36 total.
+- **Population:** **16 creatures per species / 48 total**.
+- **Evaluation:** every genotype is tested across **two independently randomised trials per generation**. Fitness is averaged across both trials before breeding.
 - **Creature, target and Invader speed:** **1.65 px/tick ≈ 99 px/s** at 60 simulation ticks/s.
 - **Projectile speed:** **4.6 px/tick ≈ 276 px/s**, or **2.788× creature speed**.
 - **Sight:** the complete 180° forward half-plane within the combat field. Bunkers occlude sight.
@@ -16,11 +17,13 @@ The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step and 
 - **Facing and movement are independent**, each using eight compass directions; movement can also remain still.
 - Species never interbreed.
 
+A genetic **generation** now contains two actual game rounds. Lifetime scoreboards still count every real round, while selection waits until both trials have completed.
+
 ## Scenarios
 
 ### Target Practice
 
-Creatures, bunkers and moving targets are regenerated across the whole square arena. Six targets begin with six distinct directions sampled from the eight compass headings. All three species receive the **same twelve physical starting positions and facings**, while genotypes are assigned to those starts independently.
+Creatures, bunkers and moving targets are regenerated across the whole square arena. Six targets begin with six distinct directions sampled from the eight compass headings. All three species receive the **same sixteen physical starting positions and facings**, while genotypes are assigned to those starts independently.
 
 Targets never fire back. Firing has a meaningful fitness cost, and after a species hits a target that target becomes unavailable to that species for two seconds. This prevents repeatedly farming one conveniently placed target and creates pressure to search, switch targets and fire selectively.
 
@@ -62,15 +65,15 @@ Generation fitness remains internal to natural selection, but the visible leader
 
 Battle Royale's **LEADER** badge does not let a one-kill/zero-death sample win forever. It remains provisional until ten recorded kill/death engagements and uses a lightly smoothed ratio for leader comparison while still displaying the raw K:D to the player.
 
-Each scenario also records how many completed rounds contributed to its totals.
+Each scenario also records how many completed rounds contributed to its totals. With RC2, two rounds normally correspond to one completed genetic generation.
 
 ## Scenario switching
 
-Changing scenario while evolution is running **queues the new scenario for the next generation**. The current round finishes normally, avoiding both accidental abandonment and rerolling an unfavourable arena while keeping already-earned lifetime points.
+Changing scenario while evolution is running **queues the new scenario for the next generation**. Both evaluation trials of the current generation finish normally before switching, avoiding accidental abandonment or arena rerolling.
 
 Brains, generation number and all four lifetime scoreboards persist across scenario changes. **Reset evolution** explicitly wipes the experiment.
 
-## Persistence
+## Persistence and RC1 migration
 
 BattlEvo uses **IndexedDB** to checkpoint the experiment.
 
@@ -78,11 +81,14 @@ A checkpoint stores:
 
 - all Red/Green/Blue genomes;
 - hidden-neuron widths;
-- generation number;
+- generation and current trial;
+- accumulated first-trial fitness when applicable;
 - current scenario;
 - completed lifetime records and per-mode round counts.
 
-Saves are generation-safe. If Safari kills or reloads a tab halfway through a round, BattlEvo restores the round from its saved starting checkpoint rather than retaining half a round's hits/kills and counting them again.
+RC2 can load RC1's old 12-creature saves. All twelve evolved genomes are retained and **four new descendants are appended** to each species to reach the new 16-creature population. Existing generation numbers and lifetime records are preserved.
+
+Saves are trial-safe. If Safari kills or reloads a tab during trial two, the completed first-trial fitness contribution remains part of the checkpoint and the current trial restarts without losing the already completed trial.
 
 A saved experiment appears as **Continue saved experiment**. Restored experiments open paused so the player decides when simulation resumes.
 
@@ -90,9 +96,10 @@ When the page goes into the background, BattlEvo saves and pauses. It deliberate
 
 ## Evolution fairness
 
-BattlEvo attempts to make brain-size comparisons meaningful instead of accidentally testing spawn luck, width-dependent signal strength or coordinate-system reconstruction.
+BattlEvo attempts to make brain-size comparisons meaningful instead of accidentally testing one lucky arena, spawn luck, width-dependent signal strength or coordinate-system reconstruction.
 
-- Target Practice gives all colours the same twelve physical starts each generation.
+- Every genotype is evaluated in **two separate randomised trials** before selection, and its fitness is averaged across them.
+- Target Practice gives all colours the same sixteen physical starts each trial.
 - Battlefield and Invaders give all species the same set of spawn slots; genotype-to-slot assignment is shuffled independently.
 - Practice colours are visually displaced only during rendering, not in simulation physics.
 - All directional scenarios use the same square combat field and rotated-equivalent geometry.
@@ -100,22 +107,22 @@ BattlEvo attempts to make brain-size comparisons meaningful instead of accidenta
 - Initial network weights use fan-in scaling.
 - Crossover preserves complete hidden-neuron subcircuits: incoming connections, hidden bias and outgoing connections travel together.
 - Mutation frequency scales sub-linearly with genome size, reducing the old penalty where a wider brain was genetically scrambled simply because it contained more weights.
-- The internal sine/cosine clock starts with a random phase each generation.
+- The internal sine/cosine clock starts with a random phase each trial.
 
 ## Firing balance
 
-Projectile physics were deliberately **not** changed during the v1 audit. Current automated measurements are:
+Projectile physics remain deliberately unchanged:
 
 - projectile / creature speed ratio: **2.788×**
 - arrival time for a projectile 100 px away from a stationary target: **0.362 s**
 - possible perpendicular movement during that warning: **35.9 px**, over five creature radii
 - catch time for a projectile starting 100 px behind a creature fleeing directly away: **0.565 s**
 - Battlefield starting progress across all four rotations: **0.0467 in every direction**
-- deterministic Invader hostile fire sample: **25 shots / 10 s per species layer**
+- deterministic Invader hostile fire sample: about **26 shots / 10 s per species layer** in RC2 CI
 
 The intended result is that bullets cannot simply be outrun, close shots are dangerous, and an early-seen trajectory can still be dodged.
 
-Firing itself is no longer almost free. Target Practice has the strongest missed-shot cost, with smaller costs in Invaders and Battle Royale so evolution has a reason to develop selective shooting rather than permanent spray-and-pray behaviour.
+Firing itself is not free. Target Practice has the strongest missed-shot cost, with smaller costs in Invaders and Battle Royale so evolution has a reason to develop selective shooting rather than permanent spray-and-pray behaviour.
 
 ## Neural fairness audit
 
@@ -139,18 +146,33 @@ Using the game's real FIRE threshold of `> 0.15`, initial firing rates are:
 
 Wider brains therefore do not begin with materially stronger action signals or a radically different chance of firing.
 
+## RC2 stress telemetry
+
+The deterministic CI stress run completed six genetic generations — **twelve trials** — in every scenario using the 16×3 population.
+
+Final lifetime totals in that synthetic run were:
+
+- Target Practice: **454 / 417 / 343 hits**
+- Battlefield Run: **10 / 15 / 19 crossings**
+- Invaders: **198 / 190 / 190 kills**
+- Battle Royale: **R 130K/129D, G 151K/134D, B 116K/134D**
+
+The deliberately worst-case all-64N Battle Royale sample, with 48 agents, achieved about **938 simulation ticks/s = 15.6× real-time** on the headless CI CPU before browser-rendering overhead. This is telemetry, not a promise for an iPhone or X220. It is why 30× remains a requested target and may show **CPU limited** on demanding configurations.
+
 ## Performance work
 
-The v1 release candidate reduces main-thread pressure substantially:
+The release candidate reduces main-thread pressure substantially:
 
 - neural hidden/output arrays are reused instead of allocated every brain evaluation;
 - each agent reuses its 77-input, 56-sector and 8-memory sensory buffers;
-- helper functions no longer create a fresh family of closures for every sensory pass;
+- helper functions avoid a fresh family of closures for every sensory pass;
 - static arena scenery is cached to an offscreen Canvas;
 - HUD DOM updates are throttled instead of rewritten every animation frame;
 - at high simulation speeds rendering is reduced while simulation continues;
 - simulation uses an **8 ms real CPU budget per animation frame**, so 30× is a target rather than permission to freeze the UI for 90 expensive ticks;
 - the UI reports requested vs achieved simulation speed and marks the run **CPU limited** when the device cannot sustain the selected multiplier.
+
+A Web Worker migration remains deliberately deferred until the RC2 physical iPhone/X220 stress test shows whether main-thread responsiveness is still a practical problem. Moving the simulation into a Worker adds architectural complexity and should solve a measured problem rather than an assumed one.
 
 ## iPhone / Safari
 
@@ -162,12 +184,12 @@ The mobile design explicitly accounts for Safari:
 - on portrait phones the decorative Canvas gutters are cropped so the **600×600 combat field uses the full available width**;
 - landscape restores the full widescreen observation view;
 - running mode has a sticky Pause + speed bar above the arena;
-- Pause has a clear visual overlay;
+- Pause has a clear visual overlay, and RC2 explicitly fixes the author-CSS bug that previously kept **PAUSED** visible while the game was actually running;
 - backgrounding explicitly pauses and resets timing on return instead of generating a catch-up burst.
 
-CI now includes a real **Playwright WebKit** interaction test, not just a Chromium phone-sized screenshot. It starts the game, validates invalid neuron values, queues scenario changes, pauses/resumes, saves/reloads/restores through IndexedDB, exercises background handling, resizes portrait→landscape and captures running WebKit screenshots.
+CI includes a real **Playwright WebKit** interaction test. RC2 explicitly verifies that PAUSED is hidden while running, appears during pause, disappears again on resume, and the simulation continues advancing afterward. It also tests neuron validation, two-trial scenario switching, IndexedDB save/reload, background handling and portrait/landscape layouts.
 
-A final physical iPhone Safari smoke test is still recommended before removing the release-candidate suffix because headless WebKit cannot reproduce every device-level Safari behaviour.
+A final physical iPhone Safari/X220 stress test is still recommended before removing the release-candidate suffix because headless WebKit cannot reproduce every device-level behaviour or thermal/performance limit.
 
 ## Run locally
 
@@ -192,20 +214,21 @@ GitHub Actions runs:
 
 - syntax checks for every runtime and test file;
 - the exact production script order;
-- complete generation rollover in all four scenarios;
+- complete two-trial generation rollover in all four scenarios;
 - 180° sight, bunker occlusion and remembered terrain;
 - facing-relative velocity sensing;
 - projectile/creature speed balance;
 - Target shot cost and anti-farming cooldown;
-- matched Target Practice starts plus all-quadrant/all-heading randomisation;
+- matched 16-agent Target Practice starts plus all-quadrant/all-heading randomisation;
 - Battlefield rotational fairness, timing and anti-shielding;
 - independent Invader targets, hostile fire and breach layers;
 - Battle Royale friendly-fire prevention and body separation;
 - lifetime hit/cross/kill/K:D accounting;
+- **RC1 12-brain → RC2 16-brain save migration**, preserving original genomes;
 - 4/10/20/64-neuron initialization fairness at the actual firing threshold;
-- a multi-generation deterministic spectator playtest;
+- a six-generation/twelve-trial deterministic stress playtest;
 - Chromium desktop rendering;
-- interactive WebKit mobile/landscape behaviour and persistence.
+- interactive WebKit mobile/landscape behaviour, persistence and pause-overlay state.
 
 Core Node audits can be run locally with:
 
@@ -215,6 +238,7 @@ node tests/audit.js
 node tests/neural-fairness.js
 node tests/target-randomization.js
 node tests/lifetime-scoreboard.js
+node tests/save-migration.js
 node tests/long-run.js
 ```
 
@@ -222,4 +246,4 @@ The WebKit test additionally requires Playwright and is intended primarily for C
 
 ## Current version
 
-**v1.0.0-rc.1** — senior QA release-candidate pass covering persistence, gameplay fairness, firing balance, performance, UI/UX and WebKit/iPhone behaviour.
+**v1.0.0-rc.2** — stress-test release candidate: permanent PAUSED-overlay fix, 16 creatures per species, two-trial genotype evaluation and in-place migration of RC1 experiments.
