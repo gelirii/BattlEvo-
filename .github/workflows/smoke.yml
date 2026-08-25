@@ -27,6 +27,7 @@ jobs:
           node --check tests/neural-fairness.js
           node --check tests/target-randomization.js
           node --check tests/cover-randomization.js
+          node --check tests/tactical-perception.js
           node --check tests/lifetime-scoreboard.js
           node --check tests/save-migration.js
           node --check tests/long-run.js
@@ -41,9 +42,11 @@ jobs:
         run: node tests/target-randomization.js
       - name: Run all-mode random-cover stress audit
         run: node tests/cover-randomization.js
+      - name: Run semantic tactical-perception audit
+        run: node tests/tactical-perception.js
       - name: Run lifetime scoreboard audit
         run: node tests/lifetime-scoreboard.js
-      - name: Run RC1 save migration audit
+      - name: Run RC5 save compatibility audit
         run: node tests/save-migration.js
       - name: Run multi-generation stress playtest
         run: node tests/long-run.js

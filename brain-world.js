@@ -15,64 +15,91 @@ function objectiveVector(agent){
   }
   return{x:0,y:0,progress:0};
 }
-function inFront(agent,obj){const dx=obj.x-agent.x,dy=obj.y-agent.y,f=DIRS[agent.facing];return dot(dx,dy,f.x,f.y)>=0;}
+
 function segmentIntersectsRect(x1,y1,x2,y2,r){
   const dx=x2-x1,dy=y2-y1;let t0=0,t1=1;
   const clip=(p,q)=>{if(Math.abs(p)<1e-9)return q>=0;const t=q/p;if(p<0){if(t>t1)return false;if(t>t0)t0=t;}else{if(t<t0)return false;if(t<t1)t1=t;}return true;};
   return clip(-dx,x1-r.x)&&clip(dx,r.x+r.w-x1)&&clip(-dy,y1-r.y)&&clip(dy,r.y+r.h-y1);
 }
+// 360° top-down visibility. Facing affects aiming only; bunkers are the sole visual occluders.
 function lineOfSight(agent,obj,ignoreBunkerId=null){
-  if(!inFront(agent,obj))return false;
   for(const b of sim.bunkers){if(b.id===ignoreBunkerId)continue;if(segmentIntersectsRect(agent.x,agent.y,obj.x,obj.y,b))return false;}
   return true;
 }
-function rememberVisibleBunkers(agent){for(const b of sim.bunkers){const centre={x:b.x+b.w/2,y:b.y+b.h/2};if(lineOfSight(agent,centre,b.id))agent.memory.set(b.id,{x:centre.x,y:centre.y,w:b.w,h:b.h,seen:sim.tick});}}
-function sensorSector(a,o,ignoreBunkerId=null){
-  if(!lineOfSight(a,o,ignoreBunkerId))return-1;
-  const dx=o.x-a.x,dy=o.y-a.y;if(dx*dx+dy*dy<1)return-1;
-  const f=DIRS[a.facing],ang=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x));
-  return clamp(Math.floor(((ang+Math.PI/2)/Math.PI)*7),0,6);
+function normX(x){return clamp((x-FIELD.cx)/(FIELD.size/2),-1,1);}
+function normY(y){return clamp((y-FIELD.cy)/(FIELD.size/2),-1,1);}
+function rankByDistance(agent,list){list.sort((a,b)=>dist2(agent,a)-dist2(agent,b)||(a.x-b.x)||(a.y-b.y));return list;}
+function actorVelocity(o){
+  if(o.species){return{x:clamp((o.x-o.lastX)/AGENT_SPEED,-1,1),y:clamp((o.y-o.lastY)/AGENT_SPEED,-1,1)};}
+  if(Number.isFinite(o.dx)||Number.isFinite(o.dy)){const len=Math.hypot(o.dx||0,o.dy||0)||1,scale=(o.speed||AGENT_SPEED)/AGENT_SPEED;return{x:clamp((o.dx||0)/len*scale,-1,1),y:clamp((o.dy||0)/len*scale,-1,1)};}
+  return{x:clamp((o.vx||0)/AGENT_SPEED,-1,1),y:clamp((o.vy||0)/AGENT_SPEED,-1,1)};
 }
-function proximity(a,o){return clamp(1-Math.hypot(o.x-a.x,o.y-a.y)/SIGHT_RANGE,0,1);}
-function relativeVelocity(a,vx,vy,scale){const f=DIRS[a.facing],right={x:-f.y,y:f.x};return{forward:clamp(dot(vx,vy,f.x,f.y)/scale,-1,1),side:clamp(dot(vx,vy,right.x,right.y)/scale,-1,1)};}
-function addEnemyInput(a,sectors,o,vx=0,vy=0){const s=sensorSector(a,o);if(s<0)return;const near=proximity(a,o),base=s*8;if(near>sectors[base]){const rv=relativeVelocity(a,vx,vy,AGENT_SPEED);sectors[base]=near;sectors[base+1]=rv.forward;sectors[base+2]=rv.side;}}
-function addFriendInput(a,sectors,o){const s=sensorSector(a,o);if(s>=0)sectors[s*8+3]=Math.max(sectors[s*8+3],proximity(a,o));}
-function addProjectileInput(a,sectors,o){const s=sensorSector(a,o);if(s<0)return;const near=proximity(a,o),base=s*8+4;if(near>sectors[base]){const rv=relativeVelocity(a,o.vx||0,o.vy||0,PROJECTILE_SPEED);sectors[base]=near;sectors[base+1]=rv.forward;sectors[base+2]=rv.side;}}
-function addBunkerInput(a,sectors,b){const o={x:b.x+b.w/2,y:b.y+b.h/2},s=sensorSector(a,o,b.id);if(s>=0)sectors[s*8+7]=Math.max(sectors[s*8+7],proximity(a,o));}
+function actorFacing(o){return Number.isInteger(o.facing)&&DIRS[o.facing]?DIRS[o.facing]:{x:0,y:0};}
+function actorHealth(o){return Number.isFinite(o.health)?clamp(o.health,0,1):1;}
 
-function buildInputs(a){
-  rememberVisibleBunkers(a);
-  const input=a.inputBuffer,sectors=a.sectorBuffer,mem=a.memoryBuffer;input.fill(0);sectors.fill(0);mem.fill(0);let k=0;
-  const f=DIRS[a.facing],mv=a.moveDir>=0?DIRS[a.moveDir]:{x:0,y:0};
-  input[k++]=a.health;input[k++]=a.cooldown<=0?1:0;input[k++]=f.x;input[k++]=f.y;input[k++]=mv.x;input[k++]=mv.y;
-  const obj=objectiveVector(a);input[k++]=obj.x;input[k++]=obj.y;input[k++]=obj.progress;
+function fillTacticalView(a){
+  const v=a.tacticalView;v.friends.length=0;v.enemies.length=0;v.friendlyProjectiles.length=0;v.enemyProjectiles.length=0;
+  const team=a.species.id;
 
-  if(sim.mode==='royale'){
-    for(const o of sim.agents){
-      if(o===a||!o.alive)continue;
-      if(o.species.id===a.species.id)addFriendInput(a,sectors,o);
-      else{const d=o.moveDir>=0?DIRS[o.moveDir]:{x:0,y:0};addEnemyInput(a,sectors,o,d.x*AGENT_SPEED,d.y*AGENT_SPEED);}
+  if(sim.mode!=='target'){
+    for(const o of sim.agents)if(o!==a&&o.alive&&o.species.id===team&&lineOfSight(a,o))v.friends.push(o);
+  }
+  if(sim.mode==='target'){
+    for(const t of sim.targets)if(targetActiveFor(t,team)&&lineOfSight(a,t))v.enemies.push(t);
+  }else if(sim.mode==='invaders'){
+    for(const n of sim.invaders)if(n.aliveFor?.[team]&&lineOfSight(a,n))v.enemies.push(n);
+  }else if(sim.mode==='royale'){
+    for(const o of sim.agents)if(o!==a&&o.alive&&o.species.id!==team&&lineOfSight(a,o))v.enemies.push(o);
+  }
+
+  for(const p of sim.projectiles){
+    if(p.dead||!lineOfSight(a,p))continue;
+    if(sim.mode==='target'){
+      if(p.owner===a)v.friendlyProjectiles.push(p);
+    }else if(sim.mode==='battlefield'){
+      if(p.owner?.species?.id===team)v.friendlyProjectiles.push(p);
+    }else if(sim.mode==='invaders'){
+      if(p.owner?.species?.id===team)v.friendlyProjectiles.push(p);
+      else if(!p.owner&&p.team==='invader'&&p.targetTeam===team)v.enemyProjectiles.push(p);
+    }else if(sim.mode==='royale'){
+      if(p.owner?.species?.id===team)v.friendlyProjectiles.push(p);
+      else if(p.owner&&p.team!==team)v.enemyProjectiles.push(p);
     }
   }
-  for(const p of sim.projectiles){
-    if(p.dead||p.owner===a)continue;
-    if(p.targetTeam&&p.targetTeam!==a.species.id)continue;
-    const hostile=sim.mode==='royale'?p.team!==a.species.id:p.team==='invader';
-    if(hostile)addProjectileInput(a,sectors,p);
-  }
-  for(const p of sim.arrows)if(!p.dead)addProjectileInput(a,sectors,p);
-  for(const b of sim.bunkers)addBunkerInput(a,sectors,b);
-  if(sim.mode==='target')for(const t of sim.targets)if(targetActiveFor(t,a.species.id)){const len=Math.hypot(t.dx||0,t.dy||0)||1;addEnemyInput(a,sectors,t,(t.dx||0)/len*t.speed,(t.dy||0)/len*t.speed);}
-  if(sim.mode==='invaders')for(const n of sim.invaders)if(n.aliveFor?.[a.species.id])addEnemyInput(a,sectors,n,n.vx||0,n.vy||0);
-  for(let i=0;i<sectors.length;i++)input[k++]=sectors[i];
+  if(sim.mode==='battlefield')for(const p of sim.arrows)if(!p.dead&&lineOfSight(a,p))v.enemyProjectiles.push(p);
 
-  for(const m of a.memory.values()){
-    const dx=m.x-a.x,dy=m.y-a.y,d=Math.hypot(dx,dy),rel=normAngle(Math.atan2(dy,dx)-Math.atan2(f.y,f.x)),sector=(Math.round(rel/(Math.PI/4))+8)%8;
-    mem[sector]=Math.max(mem[sector],clamp(1-d/SIGHT_RANGE,0,1));
-  }
-  for(let i=0;i<mem.length;i++)input[k++]=mem[i];
-  input[k++]=clamp((a.x-FIELD.cx)/(FIELD.size/2),-1,1);input[k++]=clamp((a.y-FIELD.cy)/(FIELD.size/2),-1,1);
+  rankByDistance(a,v.friends);rankByDistance(a,v.enemies);rankByDistance(a,v.friendlyProjectiles);rankByDistance(a,v.enemyProjectiles);
+  return v;
+}
+
+function writeBunkerSlot(input,k,b){
+  if(!b)return k+BUNKER_INPUTS;
+  input[k++]=1;input[k++]=normX(b.x+b.w/2);input[k++]=normY(b.y+b.h/2);input[k++]=clamp(b.w/FIELD.size,0,1);input[k++]=clamp(b.h/FIELD.size,0,1);return k;
+}
+function writeActorSlot(input,k,o){
+  if(!o)return k+ACTOR_INPUTS;
+  const vel=actorVelocity(o),face=actorFacing(o);input[k++]=1;input[k++]=normX(o.x);input[k++]=normY(o.y);input[k++]=vel.x;input[k++]=vel.y;input[k++]=face.x;input[k++]=face.y;input[k++]=actorHealth(o);return k;
+}
+function writeProjectileSlot(input,k,p){
+  if(!p)return k+PROJECTILE_INPUTS;
+  input[k++]=1;input[k++]=normX(p.x);input[k++]=normY(p.y);input[k++]=clamp((p.vx||0)/PROJECTILE_SPEED,-1,1);input[k++]=clamp((p.vy||0)/PROJECTILE_SPEED,-1,1);return k;
+}
+
+function buildInputs(a){
+  const input=a.inputBuffer;input.fill(0);let k=0;
+  const face=DIRS[a.facing],move=a.moveDir>=0?DIRS[a.moveDir]:{x:0,y:0},obj=objectiveVector(a);
+  input[k++]=normX(a.x);input[k++]=normY(a.y);input[k++]=clamp(a.health,0,1);input[k++]=a.cooldown<=0?1:0;
+  input[k++]=face.x;input[k++]=face.y;input[k++]=move.x;input[k++]=move.y;input[k++]=obj.x;input[k++]=obj.y;input[k++]=obj.progress;
   const clock=sim.tick*.025+sim.clockPhase;input[k++]=Math.sin(clock);input[k++]=Math.cos(clock);
+
+  const bunkers=[...sim.bunkers].sort((a,b)=>(a.x-b.x)||(a.y-b.y));
+  for(let i=0;i<TACTICAL_SLOTS.bunkers;i++)k=writeBunkerSlot(input,k,bunkers[i]);
+  const view=fillTacticalView(a);
+  for(let i=0;i<TACTICAL_SLOTS.friends;i++)k=writeActorSlot(input,k,view.friends[i]);
+  for(let i=0;i<TACTICAL_SLOTS.enemies;i++)k=writeActorSlot(input,k,view.enemies[i]);
+  for(let i=0;i<TACTICAL_SLOTS.friendlyProjectiles;i++)k=writeProjectileSlot(input,k,view.friendlyProjectiles[i]);
+  for(let i=0;i<TACTICAL_SLOTS.enemyProjectiles;i++)k=writeProjectileSlot(input,k,view.enemyProjectiles[i]);
+  if(k!==INPUTS)throw new Error(`Tactical input layout wrote ${k}/${INPUTS} values.`);
   return input;
 }
 

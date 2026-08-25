@@ -6,27 +6,19 @@ const fakeCtx=new Proxy({}, {get(t,p){if(!(p in t))t[p]=()=>{};return t[p];},set
 global.document={getElementById:id=>elements[id]||{value:'',disabled:false,textContent:''},addEventListener(){}};global.performance={now:()=>0};global.setRunningUI=()=>{};global.updateHud=()=>{};global.updateRoundResult=()=>{};global.saveExperiment=()=>{};
 for(const file of ['core.js','lifetime-stats.js','target-practice.js','brain-world.js','modes.js','persistence.js'])vm.runInThisContext(fs.readFileSync(file,'utf8'),{filename:file});
 const ev=code=>vm.runInThisContext(code);
-ev("selectedMode='royale';initSimulation();");
+ev("selectedMode='royale';initSimulation();sim.generation=470;sim.roundLifetimeBaseline=cloneLifetimeStats(sim.lifetime);");
 
-// Build an RC1-shaped save: schema 1, 12 brains/species, no trial or accumulated fitness field.
-const legacy=ev(`(()=>({schema:1,gameVersion:'v1.0.0-rc.1',mode:'royale',generation:470,lifetime:cloneLifetimeStats(sim.lifetime),lifetimeRounds:{target:86,battlefield:162,invaders:100,royale:89},populations:Object.fromEntries(SPECIES.map(s=>[s.id,sim.populations[s.id].slice(0,12).map(g=>({hidden:g.brain.hidden,genome:Array.from(g.brain.g),best:g.best}))]))}))()`);
-const firstGenes=Object.fromEntries(['red','green','blue'].map(id=>[id,legacy.populations[id].map(r=>r.genome.slice(0,8))]));
-ev(`restoreSimulation(${JSON.stringify(legacy)},'royale');`);
-assert.strictEqual(ev('sim.generation'),470);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev('sim.populations.red.length'),16);assert.strictEqual(ev('sim.populations.green.length'),16);assert.strictEqual(ev('sim.populations.blue.length'),16);
-assert.strictEqual(ev('sim.populations.red[0].brain.hidden'),2);assert.strictEqual(ev('sim.populations.green[0].brain.hidden'),12);assert.strictEqual(ev('sim.populations.blue[0].brain.hidden'),30);
-for(const id of ['red','green','blue'])for(let i=0;i<12;i++)assert.deepStrictEqual(Array.from(ev(`sim.populations.${id}[${i}].brain.g.slice(0,8)`)),firstGenes[id][i],`${id} legacy genome ${i} changed during expansion`);
-assert.deepStrictEqual(ev('sim.lifetimeRounds'),{target:86,battlefield:162,invaders:100,royale:89});
+// RC5 saves the new 599-input genome layout and remains scenario-independent species state.
+const snap=ev('makeSaveSnapshot()');global.__snap=snap;
+assert.strictEqual(snap.schema,4);assert.strictEqual(snap.inputCount,599);assert.strictEqual(snap.generation,470);assert.strictEqual('trial' in snap,false);assert.strictEqual('mode' in snap,false);assert.strictEqual(ev('snapshotCompatible(__snap)'),true);
+for(const id of ['red','green','blue'])for(const row of snap.populations[id])assert.strictEqual(row.genome.length,ev(`genomeLayout(${row.hidden}).count`));
 
-// RC2 trial checkpoints now restore as species state: same generation/brains, fresh Trial 1, no carried trial fitness, chosen scenario wins.
-ev("sim.trial=2;sim.populations.red[0].fitness=123.5;");
-const rc2=ev(`({schema:2,mode:'royale',generation:sim.generation,trial:sim.trial,lifetime:cloneLifetimeStats(sim.lifetime),lifetimeRounds:sim.lifetimeRounds,populations:Object.fromEntries(SPECIES.map(s=>[s.id,sim.populations[s.id].map(g=>({hidden:g.brain.hidden,genome:Array.from(g.brain.g),fitness:g.fitness,best:g.best}))]))})`);
-ev(`restoreSimulation(${JSON.stringify(rc2)},'battlefield');`);
-assert.strictEqual(ev('sim.generation'),470);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev("sim.mode"),'battlefield');assert.strictEqual(ev('sim.populations.red[0].fitness'),0);
+ev("restoreSimulation(__snap,'target');");assert.strictEqual(ev('sim.generation'),470);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev('sim.mode'),'target');assert.strictEqual(ev('sim.populations.red[0].brain.hidden'),2);assert.strictEqual(ev('sim.populations.green[0].brain.hidden'),12);assert.strictEqual(ev('sim.populations.blue[0].brain.hidden'),30);
 
-// RC3 snapshots contain evolutionary state, not the current battle/trial. Partial-round career events roll back to the trial baseline.
-ev("sim.roundLifetimeBaseline=cloneLifetimeStats(sim.lifetime);sim.lifetime.target.red.hits=99;sim.trial=4;sim.populations.red[0].fitness=77;");
-const snap=ev('makeSaveSnapshot()');
-assert.strictEqual(snap.schema,3);assert.strictEqual(snap.generation,470);assert.strictEqual('trial' in snap,false);assert.strictEqual('mode' in snap,false);assert.strictEqual('fitness' in snap.populations.red[0],false);assert.notStrictEqual(snap.lifetime.target.red.hits,99);
-ev(`restoreSimulation(${JSON.stringify(snap)},'target');`);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev('sim.mode'),'target');assert.strictEqual(ev('sim.populations.red[0].fitness'),0);
+// RC4/older genomes are intentionally rejected: their 77-input weights have no meaningful mapping to RC5 semantics.
+const legacy={...snap,schema:3,inputCount:77};global.__legacy=legacy;
+assert.strictEqual(ev('snapshotCompatible(__legacy)'),false);assert.throws(()=>ev("restoreSimulation(__legacy,'royale')"),/Unsupported BattlEvo save data/);
+const malformed={...snap,populations:{...snap.populations,red:snap.populations.red.map((r,i)=>i? r:{...r,genome:r.genome.slice(1)})}};global.__malformed=malformed;
+assert.strictEqual(ev('snapshotCompatible(__malformed)'),false);
 
-console.log('BattlEvo RC1/RC2→RC3 species-save migration audit passed.');
+console.log('BattlEvo RC5 save compatibility audit passed.');
