@@ -12,11 +12,15 @@ function openSaveDb(){
   });
 }
 function idbRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:Array.from(g.brain.g),best:Number(g.best)||0}));}
+function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:new Float32Array(g.brain.g),best:Number(g.best)||0}));}
 function makeSaveSnapshot(){
   if(!sim)return null;
   const lifetime=cloneLifetimeStats(sim.roundLifetimeBaseline||sim.lifetime);
-  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),mode:sim.mode,generation:sim.generation,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),bestEver:copyJson(sim.bestEver),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
+  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),mode:sim.mode,generation:sim.generation,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
+}
+function syncBrainInputsFromSimulation(){
+  if(!sim)return;
+  for(const s of SPECIES){const el=document.getElementById('brain-'+s.id),pop=sim.populations?.[s.id];if(el&&pop?.[0])el.value=String(pop[0].brain.hidden);}
 }
 async function saveExperiment(){
   if(!sim)return false;
@@ -27,18 +31,14 @@ async function loadExperimentSnapshot(){try{const db=await openSaveDb(),tx=db.tr
 async function clearSavedExperiment(){try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');tx.objectStore(SAVE_STORE).delete(SAVE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();savedExperimentAvailable=false;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(false);return true;}catch(err){return false;}}
 async function continueSavedExperiment(){
   const snapshot=await loadExperimentSnapshot();if(!snapshot)return false;
-  try{restoreSimulation(snapshot);paused=true;if(typeof syncModeButtons==='function')syncModeButtons();if(typeof updatePauseUI==='function')updatePauseUI();if(typeof updateHud==='function')updateHud();if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation}. The current round restarts from its saved checkpoint.`,'info');return true;}
+  try{restoreSimulation(snapshot);syncBrainInputsFromSimulation();paused=true;if(typeof syncModeButtons==='function')syncModeButtons();if(typeof updatePauseUI==='function')updatePauseUI();if(typeof updateHud==='function')updateHud();if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation}. The current round restarts from its saved checkpoint.`,'info');return true;}
   catch(err){if(typeof showNotice==='function')showNotice('The saved experiment could not be restored.','error');return false;}
 }
 async function detectSavedExperiment(){const snapshot=await loadExperimentSnapshot();savedExperimentAvailable=!!snapshot;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(savedExperimentAvailable);}
 
 async function handleVisibility(hidden){
-  if(hidden){
-    if(sim){sim.wasRunningBeforeHide=!paused;paused=true;if(typeof updatePauseUI==='function')updatePauseUI();await saveExperiment();}
-  }else{
-    if(typeof resetFrameTiming==='function')resetFrameTiming();
-    if(sim&&sim.wasRunningBeforeHide){sim.wasRunningBeforeHide=false;if(typeof showNotice==='function')showNotice('BattlEvo paused while it was in the background. Resume when ready.','info');}
-  }
+  if(hidden){if(sim){sim.wasRunningBeforeHide=!paused;paused=true;if(typeof updatePauseUI==='function')updatePauseUI();await saveExperiment();}}
+  else{if(typeof resetFrameTiming==='function')resetFrameTiming();if(sim&&sim.wasRunningBeforeHide){sim.wasRunningBeforeHide=false;if(typeof showNotice==='function')showNotice('BattlEvo paused while it was in the background. Resume when ready.','info');}}
 }
 if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>handleVisibility(document.hidden));
 if(typeof window!=='undefined'){
