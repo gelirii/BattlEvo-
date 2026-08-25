@@ -56,14 +56,14 @@ function updateLifetimeBoard(){
   for(const s of SPECIES)document.getElementById('card-'+s.id)?.classList.toggle('leader',best!==null&&metrics[s.id].eligible&&Math.abs(metrics[s.id].score-best)<1e-9);
 }
 function syncModeButtons(){const current=sim?.mode||selectedMode,pending=sim?.pendingMode||null;document.querySelectorAll('#modes button').forEach(b=>{b.classList.toggle('active',b.dataset.mode===current);b.classList.toggle('pending',b.dataset.mode===pending);});}
-function updateHud(){document.getElementById('version-badge').textContent=GAME_VERSION;document.getElementById('hud-mode').textContent=MODE_NAMES[sim?.mode||selectedMode];document.getElementById('hud-gen').textContent=sim?sim.generation:'0';updateModeBrief();updateRoundResult();updateLifetimeBoard();syncModeButtons();}
+function updateHud(){document.getElementById('version-badge').textContent=GAME_VERSION;document.getElementById('hud-mode').textContent=MODE_NAMES[sim?.mode||selectedMode];document.getElementById('hud-gen').textContent=sim?`${sim.generation} · T${sim.trial}/${TRIALS_PER_GENERATION}`:'0';document.getElementById('hud-pop').textContent=`${POP_SIZE} × 3`;updateModeBrief();updateRoundResult();updateLifetimeBoard();syncModeButtons();}
 function updateStats(){
   if(!sim)return;document.getElementById('hud-time').textContent=(sim.tick/60).toFixed(1)+'s';
   for(const s of SPECIES){const agents=sim.agents.filter(a=>a.species.id===s.id),active=agents.filter(a=>a.alive).length,neurons=sim.populations[s.id][0].brain.hidden,roundHits=agents.reduce((n,a)=>n+a.hits,0),roundKills=agents.reduce((n,a)=>n+a.kills,0);let line='';
-    if(sim.mode==='target')line=`${neurons}N · active ${active}/${POP_SIZE} · this round ${roundHits} hits`;
-    if(sim.mode==='battlefield')line=`${neurons}N · active ${active}/${POP_SIZE} · this round ${agents.filter(a=>a.finished&&a.deathTick===null).length} crossed`;
+    if(sim.mode==='target')line=`${neurons}N · active ${active}/${POP_SIZE} · this trial ${roundHits} hits`;
+    if(sim.mode==='battlefield')line=`${neurons}N · active ${active}/${POP_SIZE} · this trial ${agents.filter(a=>a.finished&&a.deathTick===null).length} crossed`;
     if(sim.mode==='invaders'){const remaining=sim.invaders.filter(n=>n.aliveFor?.[s.id]).length;line=sim.invaderCleared[s.id]?`${neurons}N · WAVE CLEARED · ${roundKills} kills`:sim.invaderBreached?.[s.id]?`${neurons}N · BREACHED · ${roundKills} kills`:`${neurons}N · alive ${active}/${POP_SIZE} · ${roundKills} kills · ${remaining} invaders`;}
-    if(sim.mode==='royale')line=`${neurons}N · alive ${active}/${POP_SIZE} · this round ${roundKills} kills`;
+    if(sim.mode==='royale')line=`${neurons}N · alive ${active}/${POP_SIZE} · this trial ${roundKills} kills`;
     document.getElementById('stat-'+s.id).textContent=line;
   }updateLifetimeBoard();
 }
@@ -93,7 +93,7 @@ document.querySelectorAll('#modes button').forEach(b=>b.addEventListener('click'
   const mode=b.dataset.mode;
   if(!sim){selectedMode=mode;syncModeButtons();updateHud();return;}
   if(mode===sim.mode){if(sim.pendingMode){sim.pendingMode=null;showNotice('Queued scenario change cancelled.','info');syncModeButtons();}return;}
-  sim.pendingMode=mode;showNotice(`${MODE_NAMES[mode]} queued for the next generation. Current round will finish first.`,'info');syncModeButtons();
+  sim.pendingMode=mode;showNotice(`${MODE_NAMES[mode]} queued for the next generation. Both evaluation trials of generation ${sim.generation} will finish first.`,'info');syncModeButtons();
 }));
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{speed=Number(b.dataset.speed);tickAccumulator=0;syncSpeedButtons();updateSpeedStatus();}));
 document.querySelectorAll('[data-pause]').forEach(b=>b.addEventListener('click',()=>{if(!sim)return;paused=!paused;tickAccumulator=0;updatePauseUI();updateSpeedStatus();if(paused&&typeof saveExperiment==='function')saveExperiment();}));

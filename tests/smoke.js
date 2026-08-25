@@ -8,33 +8,36 @@ global.document={getElementById:id=>elements[id]||{value:'',disabled:false,textC
 for(const file of ['core.js','lifetime-stats.js','target-practice.js','brain-world.js','modes.js'])vm.runInThisContext(fs.readFileSync(file,'utf8'),{filename:file});
 const ev=code=>vm.runInThisContext(code),init=mode=>ev(`selectedMode='${mode}';initSimulation();`);
 
-assert.strictEqual(ev('INPUTS'),77);assert.strictEqual(ev('OUTPUTS'),18);assert.strictEqual(ev('MIN_HIDDEN'),1);assert.strictEqual(ev('MAX_HIDDEN'),64);assert.strictEqual(ev('FIELD.size'),ev('H'));assert.ok(ev('PROJECTILE_SPEED>AGENT_SPEED'));
+assert.strictEqual(ev('INPUTS'),77);assert.strictEqual(ev('OUTPUTS'),18);assert.strictEqual(ev('MIN_HIDDEN'),1);assert.strictEqual(ev('MAX_HIDDEN'),64);assert.strictEqual(ev('POP_SIZE'),16);assert.strictEqual(ev('TRIALS_PER_GENERATION'),2);assert.strictEqual(ev('FIELD.size'),ev('H'));assert.ok(ev('PROJECTILE_SPEED>AGENT_SPEED'));
 
 for(const mode of ['target','battlefield','invaders','royale']){
-  init(mode);assert.strictEqual(ev('sim.agents.length'),36,`${mode}: expected 36 creatures`);assert.strictEqual(ev('buildInputs(sim.agents[0]).length'),77,`${mode}: sensory vector mismatch`);assert.ok(ev('sim.agents.every(a=>inArenaPoint(a))'),`${mode}: spawn outside field`);
+  init(mode);assert.strictEqual(ev('sim.agents.length'),48,`${mode}: expected 48 creatures`);assert.strictEqual(ev('buildInputs(sim.agents[0]).length'),77,`${mode}: sensory vector mismatch`);assert.ok(ev('sim.agents.every(a=>inArenaPoint(a))'),`${mode}: spawn outside field`);
   for(let i=0;i<180;i++)ev('step();');assert.ok(ev('sim&&sim.generation>=1'),`${mode}: runtime stopped`);
 }
 
-// The actual browser Target Practice implementation must be the one exercised here.
 assert.ok(!/function\s+setupTarget\s*\(/.test(fs.readFileSync('core.js','utf8')),'core.js contains an obsolete duplicate setupTarget');
 assert.ok(!/function\s+stepTargets\s*\(/.test(fs.readFileSync('modes.js','utf8')),'modes.js contains an obsolete duplicate stepTargets');
 init('target');assert.strictEqual(ev('sim.bunkers.length'),3);assert.strictEqual(ev('sim.targets.length'),6);
 
-// Same twelve physical Target Practice starts for all colours; genotype assignment may differ.
+// Same sixteen physical Target Practice starts for all colours; genotype assignment may differ.
 const starts=ev(`Object.fromEntries(SPECIES.map(s=>[s.id,sim.agents.filter(a=>a.species.id===s.id).map(a=>[+a.x.toFixed(4),+a.y.toFixed(4),a.facing]).sort((a,b)=>a[0]-b[0]||a[1]-b[1])]))`);
 assert.deepStrictEqual(starts.red,starts.green,'Red/Green Target starts are not matched');assert.deepStrictEqual(starts.red,starts.blue,'Red/Blue Target starts are not matched');
 
-// Engine-level neuron validation: no silent 5,000,000N brain and zero clamps to one.
+// Engine-level neuron validation.
 elements['brain-red'].value='5000000';elements['brain-green'].value='0';elements['brain-blue'].value='-9';init('target');
 assert.strictEqual(ev('sim.populations.red[0].brain.hidden'),64);assert.strictEqual(ev('sim.populations.green[0].brain.hidden'),1);assert.strictEqual(ev('sim.populations.blue[0].brain.hidden'),1);
 
-// Complete a real production generation in every scenario.
+// One genetic generation now contains exactly two complete evaluation trials.
 elements['brain-red'].value=elements['brain-green'].value=elements['brain-blue'].value='2';
-for(const mode of ['target','battlefield','invaders','royale']){init(mode);let guard=0;while(ev('sim.generation')===1&&guard<2800){ev('step();');guard++;}assert.strictEqual(ev('sim.generation'),2,`${mode}: generation did not finish`);assert.ok(ev('sim.lastSummary.length')>5,`${mode}: missing summary`);assert.strictEqual(ev(`sim.lifetimeRounds.${mode}`),1,`${mode}: round counter did not increment`);}
+for(const mode of ['target','battlefield','invaders','royale']){
+  init(mode);let guard=0;while(ev('sim.generation')===1&&guard<6000){ev('step();');guard++;}
+  assert.strictEqual(ev('sim.generation'),2,`${mode}: generation did not finish after two trials`);assert.strictEqual(ev('sim.trial'),1,`${mode}: next generation did not reset to trial 1`);assert.ok(ev('sim.lastSummary.length')>5,`${mode}: missing summary`);assert.strictEqual(ev(`sim.lifetimeRounds.${mode}`),2,`${mode}: expected two counted rounds per generation`);
+}
 
 const html=fs.readFileSync('index.html','utf8'),css=fs.readFileSync('style.css','utf8');
 assert.ok(/minimum-scale=0\.5/.test(html)&&/maximum-scale=5/.test(html)&&/user-scalable=yes/.test(html),'phone pinch zoom contract changed');
 assert.ok(/touch-action:auto/.test(css),'canvas must retain native Safari gestures');assert.ok(/safe-area-inset-left/.test(css)&&/safe-area-inset-bottom/.test(css),'safe-area padding missing');
 assert.ok(/\.canvasViewport\{aspect-ratio:1\}/.test(css.replace(/\s/g,''))||/\.canvasViewport\{aspect-ratio:1/.test(css.replace(/\s/g,'')),'mobile square battlefield crop missing');
+assert.ok(/pauseOverlay\[hidden\]\{display:none!important\}/.test(html.replace(/\s/g,'')),'PAUSED overlay hidden-state CSS regression');
 assert.ok(fs.existsSync('.nojekyll'));
-console.log('BattlEvo production smoke test passed.');
+console.log('BattlEvo RC2 production smoke test passed.');

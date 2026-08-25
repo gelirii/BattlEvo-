@@ -1,6 +1,6 @@
 'use strict';
 
-const SAVE_SCHEMA=1,SAVE_DB='BattlEvo',SAVE_STORE='experiments',SAVE_KEY='current';
+const SAVE_SCHEMA=2,SAVE_DB='BattlEvo',SAVE_STORE='experiments',SAVE_KEY='current';
 let savedExperimentAvailable=false,persistenceWarning='';
 
 function openSaveDb(){
@@ -12,11 +12,11 @@ function openSaveDb(){
   });
 }
 function idbRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:new Float32Array(g.brain.g),best:Number(g.best)||0}));}
+function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:new Float32Array(g.brain.g),fitness:Number(g.fitness)||0,best:Number(g.best)||0}));}
 function makeSaveSnapshot(){
   if(!sim)return null;
   const lifetime=cloneLifetimeStats(sim.roundLifetimeBaseline||sim.lifetime);
-  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),mode:sim.mode,generation:sim.generation,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
+  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),mode:sim.mode,generation:sim.generation,trial:sim.trial,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
 }
 function syncBrainInputsFromSimulation(){
   if(!sim)return;
@@ -31,7 +31,14 @@ async function loadExperimentSnapshot(){try{const db=await openSaveDb(),tx=db.tr
 async function clearSavedExperiment(){try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');tx.objectStore(SAVE_STORE).delete(SAVE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();savedExperimentAvailable=false;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(false);return true;}catch(err){return false;}}
 async function continueSavedExperiment(){
   const snapshot=await loadExperimentSnapshot();if(!snapshot)return false;
-  try{restoreSimulation(snapshot);syncBrainInputsFromSimulation();paused=true;if(typeof syncModeButtons==='function')syncModeButtons();if(typeof updatePauseUI==='function')updatePauseUI();if(typeof updateHud==='function')updateHud();if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation}. The current round restarts from its saved checkpoint.`,'info');return true;}
+  try{
+    const oldSize=snapshot.populations?.red?.length||0;
+    restoreSimulation(snapshot);syncBrainInputsFromSimulation();paused=true;
+    if(typeof syncModeButtons==='function')syncModeButtons();if(typeof updatePauseUI==='function')updatePauseUI();if(typeof updateHud==='function')updateHud();
+    const migrated=oldSize&&oldSize<POP_SIZE?` Population expanded ${oldSize}→${POP_SIZE}; original evolved brains were preserved and new descendants added.`:'';
+    if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation}, trial ${sim.trial}/${TRIALS_PER_GENERATION}. The current trial restarts from its checkpoint.${migrated}`,'info');
+    return true;
+  }
   catch(err){if(typeof showNotice==='function')showNotice('The saved experiment could not be restored.','error');return false;}
 }
 async function detectSavedExperiment(){const snapshot=await loadExperimentSnapshot();savedExperimentAvailable=!!snapshot;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(savedExperimentAvailable);}

@@ -10,9 +10,7 @@ const ev=code=>vm.runInThisContext(code);
 const modes=['target','battlefield','invaders','royale'];
 const reports={};
 
-function lifetimeSnapshot(mode){
-  return ev(`Object.fromEntries(SPECIES.map(s=>[s.id,lifetimeMetric('${mode}',s.id).value]))`);
-}
+function lifetimeSnapshot(mode){return ev(`Object.fromEntries(SPECIES.map(s=>[s.id,lifetimeMetric('${mode}',s.id).value]))`);}
 function numericSnapshot(mode){
   if(mode==='target')return ev(`Object.fromEntries(SPECIES.map(s=>[s.id,sim.lifetime.target[s.id].hits]))`);
   if(mode==='battlefield')return ev(`Object.fromEntries(SPECIES.map(s=>[s.id,sim.lifetime.battlefield[s.id].crosses]))`);
@@ -23,9 +21,10 @@ function numericSnapshot(mode){
 for(const mode of modes){
   elements['brain-red'].value='4';elements['brain-green'].value='10';elements['brain-blue'].value='20';ev(`selectedMode='${mode}';paused=false;initSimulation();`);
   const start=process.hrtime.bigint(),perGeneration=[];let ticks=0,lastGen=1,guard=0;
-  while(ev('sim.generation')<=6&&guard<18000){ev('step();');ticks++;guard++;const g=ev('sim.generation');if(g!==lastGen){perGeneration.push({completed:lastGen,total:numericSnapshot(mode)});lastGen=g;}}
+  while(ev('sim.generation')<=6&&guard<36000){ev('step();');ticks++;guard++;const g=ev('sim.generation');if(g!==lastGen){perGeneration.push({completed:lastGen,total:numericSnapshot(mode),rounds:ev(`sim.lifetimeRounds.${mode}`)});lastGen=g;}}
   const ms=Number(process.hrtime.bigint()-start)/1e6;
-  assert.ok(ev('sim.generation')>=7,`${mode}: six-generation playtest did not complete`);
+  assert.ok(ev('sim.generation')>=7,`${mode}: six-generation / twelve-trial playtest did not complete`);
+  assert.strictEqual(ev(`sim.lifetimeRounds.${mode}`),12,`${mode}: six generations should contain twelve trials`);
   assert.ok(ev('sim.agents.every(a=>Number.isFinite(a.x)&&Number.isFinite(a.y)&&Number.isFinite(a.fitness))'),`${mode}: non-finite agent state`);
   assert.ok(ev('Object.values(sim.populations).flat().every(g=>g.brain.g.every(Number.isFinite))'),`${mode}: non-finite genome state`);
   const totals=numericSnapshot(mode);
@@ -35,11 +34,11 @@ for(const mode of modes){
   reports[mode]={ticks,ms:+ms.toFixed(1),ticksPerSecond:+(ticks/(ms/1000)).toFixed(0),generations:perGeneration,display:lifetimeSnapshot(mode)};
 }
 
-// Heavy-width throughput sample and allocation contracts. This is comparative telemetry,
-// not a hardware promise: CI is not an iPhone or X220.
+// Worst-case all-64N throughput sample with 48 simultaneously simulated creatures.
 elements['brain-red'].value=elements['brain-green'].value=elements['brain-blue'].value='64';ev("selectedMode='royale';paused=false;initSimulation();");
+assert.strictEqual(ev('sim.agents.length'),48);
 const agent=ev('sim.agents[0]'),input1=ev('buildInputs(sim.agents[0])'),input2=ev('buildInputs(sim.agents[0])');assert.strictEqual(input1,input2,'sensory input buffer is being reallocated');const out1=agent.genotype.brain.run(input1),out2=agent.genotype.brain.run(input1);assert.strictEqual(out1,out2,'brain output buffer is being reallocated');
 const heavyStart=process.hrtime.bigint();for(let i=0;i<240;i++)ev('step();');const heavyMs=Number(process.hrtime.bigint()-heavyStart)/1e6;assert.ok(ev('sim.agents.every(a=>Number.isFinite(a.fitness))'));
-reports.all64Royale={ticks:240,ms:+heavyMs.toFixed(1),ticksPerSecond:+(240/(heavyMs/1000)).toFixed(0)};
+reports.all64Royale={population:'16×3',trialsPerGeneration:2,ticks:240,ms:+heavyMs.toFixed(1),ticksPerSecond:+(240/(heavyMs/1000)).toFixed(0),realtimeMultiple:+((240/(heavyMs/1000))/60).toFixed(1)};
 
-console.log('BattlEvo multi-generation playtest passed.');console.log(JSON.stringify(reports,null,2));
+console.log('BattlEvo RC2 multi-generation stress playtest passed.');console.log(JSON.stringify(reports,null,2));
