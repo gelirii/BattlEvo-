@@ -11,15 +11,16 @@ const {webkit}=require('playwright');
   await page.goto('http://127.0.0.1:8000/',{waitUntil:'load'});
   await page.evaluate(()=>clearSavedExperiment());
 
-  assert.ok((await page.textContent('#version-badge')).includes('v1.0.0-rc.3'));
+  assert.ok((await page.textContent('#version-badge')).includes('v1.0.0-rc.4'));
   await page.fill('#brain-red','5000000');await page.fill('#brain-green','0');await page.fill('#brain-blue','20');
   await page.click('#start');await page.waitForTimeout(150);
   assert.strictEqual(await page.inputValue('#brain-red'),'64');assert.strictEqual(await page.inputValue('#brain-green'),'1');
   assert.ok(await page.evaluate(()=>document.body.classList.contains('running')));
-  assert.strictEqual(await page.evaluate(()=>sim.agents.length),48,'RC3 did not start 16 creatures/species');
+  assert.strictEqual(await page.evaluate(()=>sim.agents.length),48,'RC4 did not start 16 creatures/species');
   assert.strictEqual((await page.textContent('#hud-pop')).trim(),'16 × 3');
   assert.ok((await page.textContent('#hud-gen')).includes('T1/4'));
   assert.strictEqual(await page.evaluate(()=>TRIALS_PER_GENERATION),4);assert.strictEqual(await page.evaluate(()=>MAX_TICKS.royale),3600);
+  assert.ok(await page.evaluate(()=>sim.agents.every(a=>sim.bunkers.every(b=>!rectCircleHit(b,a,AGENT_R+10))),'initial arena contains a spawn/cover collision');
 
   const crop=await page.evaluate(()=>{const v=document.querySelector('.canvasViewport').getBoundingClientRect(),c=document.querySelector('#game').getBoundingClientRect();return{viewport:v.width,canvas:c.width,field:c.width*(600/960),height:v.height};});
   assert.ok(Math.abs(crop.viewport-crop.field)<3,`mobile field width ${crop.field} does not fill viewport ${crop.viewport}`);assert.ok(Math.abs(crop.viewport-crop.height)<3,'mobile field viewport is not square');
@@ -31,6 +32,7 @@ const {webkit}=require('playwright');
     assert.strictEqual(await page.evaluate(()=>sim.mode),'target');assert.strictEqual(await page.evaluate(()=>sim.trial),trial);
   }
   await page.evaluate(()=>{sim.tick=MAX_TICKS[sim.mode]-1;step();});await page.waitForTimeout(30);assert.strictEqual(await page.evaluate(()=>sim.mode),'invaders');assert.strictEqual(await page.evaluate(()=>sim.generation),2);assert.strictEqual(await page.evaluate(()=>sim.trial),1);
+  assert.ok(await page.evaluate(()=>sim.agents.every(a=>sim.bunkers.every(b=>!rectCircleHit(b,a,AGENT_R+10))),'Invaders contains a spawn/cover collision');
 
   // PAUSED must appear only while actually paused and disappear immediately on resume.
   const mobilePause=page.locator('.mobileRunBar [data-pause]');assert.ok(await mobilePause.isVisible());assert.strictEqual(await page.locator('#pause-overlay').isVisible(),false,'PAUSED overlay visible while game is running');
@@ -54,6 +56,7 @@ const {webkit}=require('playwright');
   await page.click('[data-mode="battlefield"]');assert.strictEqual(await page.evaluate(()=>selectedMode),'battlefield');
   await page.click('#continue');await page.waitForTimeout(120);
   assert.strictEqual(await page.evaluate(()=>sim.generation),200);assert.strictEqual(await page.evaluate(()=>sim.trial),1);assert.strictEqual(await page.evaluate(()=>sim.mode),'battlefield');assert.strictEqual(await page.evaluate(()=>paused),true);assert.ok(await page.locator('#pause-overlay').isVisible());assert.strictEqual(await page.evaluate(()=>sim.populations.red.length),16);
+  assert.ok(await page.evaluate(()=>sim.agents.every(a=>sim.bunkers.every(b=>!rectCircleHit(b,a,AGENT_R+10))),'restored Battlefield contains a spawn/cover collision');
 
   await page.evaluate(()=>{paused=false;updatePauseUI();resetFrameTiming();});assert.strictEqual(await page.locator('#pause-overlay').isVisible(),false);await page.evaluate(()=>handleVisibility(true));assert.strictEqual(await page.evaluate(()=>paused),true);assert.ok(await page.locator('#pause-overlay').isVisible());await page.evaluate(()=>handleVisibility(false));assert.strictEqual(await page.evaluate(()=>paused),true);
 
@@ -62,5 +65,5 @@ const {webkit}=require('playwright');
 
   await page.screenshot({path:'battlevo-webkit-landscape.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'battlevo-webkit-phone.png',fullPage:true});
   assert.deepStrictEqual(errors,[],`WebKit page errors: ${errors.join('\n')}`);
-  await browser.close();console.log('BattlEvo RC3 WebKit interaction audit passed.');
+  await browser.close();console.log('BattlEvo RC4 WebKit interaction audit passed.');
 })().catch(err=>{console.error(err);process.exit(1);});
