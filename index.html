@@ -11,31 +11,34 @@
 <div class="shell">
 <header>
   <div><h1>BattlEvo</h1><div class="sub">Evolve three species. Train their instincts. Send them to war.</div></div>
-  <div class="version">v0.2.4</div>
+  <div class="version" id="version-badge">release candidate</div>
 </header>
+<div id="notice" class="notice" hidden></div>
 <div class="grid">
   <aside class="panel controls">
-    <div class="sectionLabel">Species brains</div>
-    <div class="speciesCard redCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label for="brain-red">Hidden neurons</label><input id="brain-red" type="number" min="1" max="64" step="1" value="4"></div>
-    <div class="speciesCard greenCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label for="brain-green">Hidden neurons</label><input id="brain-green" type="number" min="1" max="64" step="1" value="10"></div>
-    <div class="speciesCard blueCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label for="brain-blue">Hidden neurons</label><input id="brain-blue" type="number" min="1" max="64" step="1" value="20"></div>
+    <div class="sectionLabel">Species brains <button class="infoButton" id="brain-help" type="button" aria-label="What do hidden neurons mean?">?</button></div>
+    <div class="speciesCard redCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label for="brain-red">Hidden neurons · 1–64</label><input id="brain-red" type="number" inputmode="numeric" min="1" max="64" step="1" value="4"></div>
+    <div class="speciesCard greenCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label for="brain-green">Hidden neurons · 1–64</label><input id="brain-green" type="number" inputmode="numeric" min="1" max="64" step="1" value="10"></div>
+    <div class="speciesCard blueCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label for="brain-blue">Hidden neurons · 1–64</label><input id="brain-blue" type="number" inputmode="numeric" min="1" max="64" step="1" value="20"></div>
+    <div id="brain-help-text" class="brief helpText" hidden>Hidden neurons are brain capacity, not a difficulty setting. More neurons create more connections for evolution to explore, but a bigger brain is not automatically better.</div>
 
     <div class="scenarioPicker">
       <div class="sectionLabel">Scenario</div>
       <div class="modes" id="modes">
-        <button data-mode="target" class="active"><span>🎯</span> Target Practice</button>
-        <button data-mode="battlefield"><span>🏹</span> Battlefield Run</button>
-        <button data-mode="invaders"><span>👾</span> Invaders</button>
-        <button data-mode="royale"><span>⚔️</span> Battle Royale</button>
+        <button data-mode="target" class="active"><span class="scenarioIcon">◎</span> Target Practice</button>
+        <button data-mode="battlefield"><span class="scenarioIcon">➜</span> Battlefield Run</button>
+        <button data-mode="invaders"><span class="scenarioIcon">▦</span> Invaders</button>
+        <button data-mode="royale"><span class="scenarioIcon">✦</span> Battle Royale</button>
       </div>
-      <div id="mode-brief" class="brief">Random positions, random cover and semi-regular moving targets. Learn to find, track and lead worthwhile targets in any direction.</div>
+      <div id="mode-brief" class="brief"></div>
     </div>
 
-    <button id="start" class="primary">START EVOLUTION</button>
-    <div class="buttonRow"><button id="pause" disabled>Pause</button><button id="reset" disabled>Reset evolution</button></div>
-    <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
-    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles, but once a bunker has been seen its location remains in that creature's remembered map. Switching scenarios keeps the evolved brains and each scenario's lifetime scoreboard; Reset evolution wipes them.</div>
-    <div class="mobileHint">On iPhone, landscape gives the largest arena. Normal page scrolling and pinch-zoom stay enabled, including zooming out.</div>
+    <button id="continue" class="secondary saveButton" hidden>CONTINUE SAVED EXPERIMENT</button>
+    <button id="start" class="primary">START NEW EVOLUTION</button>
+    <div class="buttonRow"><button data-pause disabled>Pause</button><button id="reset" disabled>Reset evolution</button></div>
+    <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div><div id="speed-status" class="tiny speedStatus">1× target</div></div>
+    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles; once seen, a bunker stays in that creature's remembered map. Scenario changes start next generation. Autosave checkpoints protect completed evolution and career records.</div>
+    <div class="mobileHint">On iPhone the running view crops the decorative side gutters so the square battlefield uses the full screen width. Page scrolling and pinch-zoom remain enabled.</div>
   </aside>
 
   <main class="panel arenaPanel">
@@ -45,22 +48,27 @@
       <div class="hudBox"><span>Population</span><strong id="hud-pop">12 × 3</strong></div>
       <div class="hudBox"><span>Sim time</span><strong id="hud-time">0.0s</strong></div>
     </div>
-    <canvas id="game" width="960" height="600" aria-label="BattlEvo simulation arena"></canvas>
-    <div class="resultStrip"><span>Last round</span><strong id="round-result">No completed rounds yet.</strong></div>
+    <div class="mobileRunBar" aria-label="Running controls"><button data-pause disabled>Pause</button><div class="mobileSpeed"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
+    <div class="canvasViewport">
+      <canvas id="game" width="960" height="600" aria-label="BattlEvo simulation arena"></canvas>
+      <div id="pause-overlay" class="pauseOverlay" hidden>PAUSED</div>
+    </div>
+    <div class="resultStrip"><span>Last round</span><strong id="round-result">No completed rounds yet.</strong><em id="mode-rounds">0 rounds</em></div>
     <div class="speciesStats">
       <div class="statCard" id="card-red"><b><span class="dot red"></span> Red</b><div class="statLine" id="stat-red">Waiting to evolve.</div><div class="lifetimeStat"><span id="lifetime-label-red">TOTAL HITS</span><strong id="lifetime-value-red">0</strong></div></div>
       <div class="statCard" id="card-green"><b><span class="dot green"></span> Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div><div class="lifetimeStat"><span id="lifetime-label-green">TOTAL HITS</span><strong id="lifetime-value-green">0</strong></div></div>
       <div class="statCard" id="card-blue"><b><span class="dot blue"></span> Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div><div class="lifetimeStat"><span id="lifetime-label-blue">TOTAL HITS</span><strong id="lifetime-value-blue">0</strong></div></div>
     </div>
-    <div class="legend">The bright nose line shows facing; movement is independent. Species shots inherit their colour, pale arrows are battlefield fire, purple shots belong to invaders, and tan blocks are bunkers. A thin ring around a Battle Royale creature shows its remaining health. LEADER now reflects the accumulated scenario statistic rather than one generation's fitness.</div>
+    <div class="legend">The bright nose line shows facing; movement is independent. Coloured shots belong to species, pale arrows are battlefield fire, purple-core shots belong to Invaders, and tan blocks are bunkers. LEADER follows accumulated scenario performance; Battle Royale K:D remains provisional until 10 recorded engagements.</div>
   </main>
 </div>
 </div>
 <script src="core.js"></script>
+<script src="lifetime-stats.js"></script>
+<script src="target-practice.js"></script>
 <script src="brain-world.js"></script>
 <script src="modes.js"></script>
-<script src="lifetime-stats.js"></script>
+<script src="persistence.js"></script>
 <script src="ui.js"></script>
-<script src="target-practice.js"></script>
 </body>
 </html>
