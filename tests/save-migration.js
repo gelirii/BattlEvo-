@@ -9,16 +9,16 @@ const ev=code=>vm.runInThisContext(code);
 ev("selectedMode='royale';initSimulation();sim.generation=470;sim.roundLifetimeBaseline=cloneLifetimeStats(sim.lifetime);");
 
 // RC5 saves the new 599-input genome layout and remains scenario-independent species state.
-const snap=ev('makeSaveSnapshot()');
-assert.strictEqual(snap.schema,4);assert.strictEqual(snap.inputCount,599);assert.strictEqual(snap.generation,470);assert.strictEqual('trial' in snap,false);assert.strictEqual('mode' in snap,false);assert.strictEqual(ev('snapshotCompatible(makeSaveSnapshot())'),true);
+const snap=ev('makeSaveSnapshot()');global.__snap=snap;
+assert.strictEqual(snap.schema,4);assert.strictEqual(snap.inputCount,599);assert.strictEqual(snap.generation,470);assert.strictEqual('trial' in snap,false);assert.strictEqual('mode' in snap,false);assert.strictEqual(ev('snapshotCompatible(__snap)'),true);
 for(const id of ['red','green','blue'])for(const row of snap.populations[id])assert.strictEqual(row.genome.length,ev(`genomeLayout(${row.hidden}).count`));
 
-ev(`restoreSimulation(${JSON.stringify(snap)},'target');`);assert.strictEqual(ev('sim.generation'),470);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev('sim.mode'),'target');assert.strictEqual(ev('sim.populations.red[0].brain.hidden'),2);assert.strictEqual(ev('sim.populations.green[0].brain.hidden'),12);assert.strictEqual(ev('sim.populations.blue[0].brain.hidden'),30);
+ev("restoreSimulation(__snap,'target');");assert.strictEqual(ev('sim.generation'),470);assert.strictEqual(ev('sim.trial'),1);assert.strictEqual(ev('sim.mode'),'target');assert.strictEqual(ev('sim.populations.red[0].brain.hidden'),2);assert.strictEqual(ev('sim.populations.green[0].brain.hidden'),12);assert.strictEqual(ev('sim.populations.blue[0].brain.hidden'),30);
 
 // RC4/older genomes are intentionally rejected: their 77-input weights have no meaningful mapping to RC5 semantics.
-const legacy=JSON.parse(JSON.stringify(snap));legacy.schema=3;legacy.inputCount=77;
-assert.strictEqual(ev(`snapshotCompatible(${JSON.stringify(legacy)})`),false);assert.throws(()=>ev(`restoreSimulation(${JSON.stringify(legacy)},'royale')`),/Unsupported BattlEvo save data/);
-const malformed=JSON.parse(JSON.stringify(snap));malformed.populations.red[0].genome=malformed.populations.red[0].genome.slice(1);
-assert.strictEqual(ev(`snapshotCompatible(${JSON.stringify(malformed)})`),false);
+const legacy={...snap,schema:3,inputCount:77};global.__legacy=legacy;
+assert.strictEqual(ev('snapshotCompatible(__legacy)'),false);assert.throws(()=>ev("restoreSimulation(__legacy,'royale')"),/Unsupported BattlEvo save data/);
+const malformed={...snap,populations:{...snap.populations,red:snap.populations.red.map((r,i)=>i? r:{...r,genome:r.genome.slice(1)})}};global.__malformed=malformed;
+assert.strictEqual(ev('snapshotCompatible(__malformed)'),false);
 
 console.log('BattlEvo RC5 save compatibility audit passed.');
