@@ -4,12 +4,12 @@ BattlEvo is a dependency-free browser neural-evolution arcade. Three independent
 
 The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step and no runtime library dependency.
 
-## v1 RC2 stress-test rules
+## v1 RC3 rules
 
 - **Hidden neurons:** 1–64 per species. Inputs are validated and the visible controls always show the brain size actually in use.
 - **Network:** 77 inputs → one user-sized hidden layer → 18 outputs.
 - **Population:** **16 creatures per species / 48 total**.
-- **Evaluation:** every genotype is tested across **two independently randomised trials per generation**. Fitness is averaged across both trials before breeding.
+- **Evaluation:** every genotype is tested across **four independently randomised trials per generation**. Fitness is averaged across all four trials before breeding.
 - **Creature, target and Invader speed:** **1.65 px/tick ≈ 99 px/s** at 60 simulation ticks/s.
 - **Projectile speed:** **4.6 px/tick ≈ 276 px/s**, or **2.788× creature speed**.
 - **Sight:** the complete 180° forward half-plane within the combat field. Bunkers occlude sight.
@@ -17,7 +17,7 @@ The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step and 
 - **Facing and movement are independent**, each using eight compass directions; movement can also remain still.
 - Species never interbreed.
 
-A genetic **generation** now contains two actual game rounds. Lifetime scoreboards still count every real round, while selection waits until both trials have completed.
+A genetic **generation** contains four actual game rounds. Lifetime scoreboards count every real round, while natural selection waits until all four evaluation trials have completed.
 
 ## Scenarios
 
@@ -43,6 +43,8 @@ Every Invader has separate Red/Green/Blue logical state. Target survival, front-
 
 Red vs Green vs Blue team combat. Creatures recognise their own colour as friendly, cannot damage teammates and use equidistant team homes with rotationally symmetric cover. Living creatures also have simple physical separation so opposing teams cannot collapse into the exact same point.
 
+RC3 extends the maximum Battle Royale round from **35 seconds to 60 seconds**. A genuine team wipe still ends the trial immediately; the extra time exists only to give unresolved fights more opportunity to reach an outright winner naturally.
+
 ## Shared combat vocabulary
 
 Practice modes deliberately use the same sensory concepts as Battle Royale:
@@ -65,40 +67,42 @@ Generation fitness remains internal to natural selection, but the visible leader
 
 Battle Royale's **LEADER** badge does not let a one-kill/zero-death sample win forever. It remains provisional until ten recorded kill/death engagements and uses a lightly smoothed ratio for leader comparison while still displaying the raw K:D to the player.
 
-Each scenario also records how many completed rounds contributed to its totals. With RC2, two rounds normally correspond to one completed genetic generation.
+Each scenario also records how many completed rounds contributed to its totals. Four rounds normally correspond to one completed genetic generation.
 
 ## Scenario switching
 
-Changing scenario while evolution is running **queues the new scenario for the next generation**. Both evaluation trials of the current generation finish normally before switching, avoiding accidental abandonment or arena rerolling.
+Changing scenario while evolution is running **queues the new scenario for the next generation**. All four evaluation trials of the current generation finish normally before switching, avoiding accidental abandonment or arena rerolling.
 
-Brains, generation number and all four lifetime scoreboards persist across scenario changes. **Reset evolution** explicitly wipes the experiment.
+Brains, generation number and all four lifetime scoreboards persist across scenario changes.
 
-## Persistence and RC1 migration
+## Persistent species-state saving
 
-BattlEvo uses **IndexedDB** to checkpoint the experiment.
+BattlEvo uses **IndexedDB** for one persistent current evolution.
 
-A checkpoint stores:
+The saved object is the **species/evolution state**, not the current battle. A save stores:
 
 - all Red/Green/Blue genomes;
 - hidden-neuron widths;
-- generation and current trial;
-- accumulated first-trial fitness when applicable;
-- current scenario;
+- generation number;
 - completed lifetime records and per-mode round counts.
 
-RC2 can load RC1's old 12-creature saves. All twelve evolved genomes are retained and **four new descendants are appended** to each species to reach the new 16-creature population. Existing generation numbers and lifetime records are preserved.
+It deliberately does **not** store creature positions, projectiles, bunker positions, current target movement, current trial number or partial trial fitness.
 
-Saves are trial-safe. If Safari kills or reloads a tab during trial two, the completed first-trial fitness contribution remains part of the checkpoint and the current trial restarts without losing the already completed trial.
+Pressing **Save** pauses the game and writes this state immediately. After a refresh, browser restart or later return, the opening screen shows the saved neuron widths locked and a **Continue Gen N** button. The player can choose Target Practice, Battlefield Run, Invaders or Battle Royale before continuing. The saved generation then starts at **Trial 1/4 on a fresh arena** using the preserved brains.
 
-A saved experiment appears as **Continue saved experiment**. Restored experiments open paused so the player decides when simulation resumes.
+If Save is pressed halfway through a trial, partial career events from that unfinished trial are rolled back to the trial-start baseline. Completed rounds remain in the career totals. Trial-evaluation fitness is intentionally discarded so a half-finished Royale trial cannot influence breeding after the species resume in a completely different scenario.
 
-When the page goes into the background, BattlEvo saves and pauses. It deliberately does **not** pretend iOS will continue running the neural simulation in the background or try to catch up hidden-tab time when returning.
+Automatic safety checkpoints also remain after completed trials/generations and when the page backgrounds. They use the same species-state format, so ordinary recovery does not depend solely on iOS giving a disappearing page enough time to finish an emergency write.
+
+If a saved evolution exists, hidden-neuron controls stay locked and **Start New Evolution** is unavailable. **Reset Evolution** is the deliberate action that erases the saved brains, career records and generation and returns BattlEvo to Gen 0 with editable neuron counts.
+
+RC3 remains backward-compatible with RC1/RC2 saves. Older 12-creature populations are expanded to 16 while preserving the original evolved genomes; old mid-trial fitness is discarded under the new clean species-state semantics.
 
 ## Evolution fairness
 
 BattlEvo attempts to make brain-size comparisons meaningful instead of accidentally testing one lucky arena, spawn luck, width-dependent signal strength or coordinate-system reconstruction.
 
-- Every genotype is evaluated in **two separate randomised trials** before selection, and its fitness is averaged across them.
+- Every genotype is evaluated in **four separate randomised trials** before selection, and its fitness is averaged across them.
 - Target Practice gives all colours the same sixteen physical starts each trial.
 - Battlefield and Invaders give all species the same set of spawn slots; genotype-to-slot assignment is shuffled independently.
 - Practice colours are visually displaced only during rendering, not in simulation physics.
@@ -118,7 +122,7 @@ Projectile physics remain deliberately unchanged:
 - possible perpendicular movement during that warning: **35.9 px**, over five creature radii
 - catch time for a projectile starting 100 px behind a creature fleeing directly away: **0.565 s**
 - Battlefield starting progress across all four rotations: **0.0467 in every direction**
-- deterministic Invader hostile fire sample: about **26 shots / 10 s per species layer** in RC2 CI
+- deterministic Invader hostile fire sample: about **27 shots / 10 s per species layer** in RC3 CI
 
 The intended result is that bullets cannot simply be outrun, close shots are dangerous, and an early-seen trajectory can still be dodged.
 
@@ -146,18 +150,20 @@ Using the game's real FIRE threshold of `> 0.15`, initial firing rates are:
 
 Wider brains therefore do not begin with materially stronger action signals or a radically different chance of firing.
 
-## RC2 stress telemetry
+## RC3 stress telemetry
 
-The deterministic CI stress run completed six genetic generations — **twelve trials** — in every scenario using the 16×3 population.
+The deterministic CI stress run completed three genetic generations — **twelve trials** — in every scenario using the 16×3 population and four-trial evaluation model.
 
 Final lifetime totals in that synthetic run were:
 
-- Target Practice: **454 / 417 / 343 hits**
-- Battlefield Run: **10 / 15 / 19 crossings**
-- Invaders: **198 / 190 / 190 kills**
-- Battle Royale: **R 130K/129D, G 151K/134D, B 116K/134D**
+- Target Practice: **432 / 441 / 370 hits**
+- Battlefield Run: **12 / 10 / 13 crossings**
+- Invaders: **174 / 190 / 181 kills**
+- Battle Royale: **R 155K/142D, G 107K/165D, B 163K/118D**
 
-The deliberately worst-case all-64N Battle Royale sample, with 48 agents, achieved about **938 simulation ticks/s = 15.6× real-time** on the headless CI CPU before browser-rendering overhead. This is telemetry, not a promise for an iPhone or X220. It is why 30× remains a requested target and may show **CPU limited** on demanding configurations.
+All twelve early-generation Battle Royale trials reached the new 60-second cap in this deterministic test. Those synthetic brains are deliberately immature; the result confirms the longer timeout is being exercised rather than implying an evolved lineage cannot win earlier.
+
+The deliberately worst-case all-64N Battle Royale sample, with 48 agents, achieved about **845 simulation ticks/s = 14.1× real-time** on the headless CI CPU before browser-rendering overhead. This is telemetry, not a promise for an iPhone or X220. It is why 30× remains a requested target and may show **CPU limited** on demanding configurations.
 
 ## Performance work
 
@@ -172,7 +178,7 @@ The release candidate reduces main-thread pressure substantially:
 - simulation uses an **8 ms real CPU budget per animation frame**, so 30× is a target rather than permission to freeze the UI for 90 expensive ticks;
 - the UI reports requested vs achieved simulation speed and marks the run **CPU limited** when the device cannot sustain the selected multiplier.
 
-A Web Worker migration remains deliberately deferred until the RC2 physical iPhone/X220 stress test shows whether main-thread responsiveness is still a practical problem. Moving the simulation into a Worker adds architectural complexity and should solve a measured problem rather than an assumed one.
+A Web Worker migration remains deliberately deferred until physical iPhone/X220 stress testing shows that main-thread responsiveness is still a practical problem. Moving the simulation into a Worker adds architectural complexity and should solve a measured problem rather than an assumed one.
 
 ## iPhone / Safari
 
@@ -183,11 +189,11 @@ The mobile design explicitly accounts for Safari:
 - buttons use normal click semantics rather than mouse-only handlers;
 - on portrait phones the decorative Canvas gutters are cropped so the **600×600 combat field uses the full available width**;
 - landscape restores the full widescreen observation view;
-- running mode has a sticky Pause + speed bar above the arena;
-- Pause has a clear visual overlay, and RC2 explicitly fixes the author-CSS bug that previously kept **PAUSED** visible while the game was actually running;
+- running mode has a sticky **Pause + Save + speed** bar above the arena;
+- Pause has a clear visual overlay;
 - backgrounding explicitly pauses and resets timing on return instead of generating a catch-up burst.
 
-CI includes a real **Playwright WebKit** interaction test. RC2 explicitly verifies that PAUSED is hidden while running, appears during pause, disappears again on resume, and the simulation continues advancing afterward. It also tests neuron validation, two-trial scenario switching, IndexedDB save/reload, background handling and portrait/landscape layouts.
+CI includes a real **Playwright WebKit** interaction test. RC3 verifies that Save pauses the game, persists the saved generation through IndexedDB, reloads into the locked saved-evolution screen, allows a different scenario to be selected, restores the same generation at Trial 1/4, preserves neuron widths, and keeps the existing pause/background/orientation checks.
 
 A final physical iPhone Safari/X220 stress test is still recommended before removing the release-candidate suffix because headless WebKit cannot reproduce every device-level behaviour or thermal/performance limit.
 
@@ -214,7 +220,8 @@ GitHub Actions runs:
 
 - syntax checks for every runtime and test file;
 - the exact production script order;
-- complete two-trial generation rollover in all four scenarios;
+- complete **four-trial** generation rollover in all four scenarios;
+- the **60-second** Battle Royale cap;
 - 180° sight, bunker occlusion and remembered terrain;
 - facing-relative velocity sensing;
 - projectile/creature speed balance;
@@ -224,11 +231,11 @@ GitHub Actions runs:
 - independent Invader targets, hostile fire and breach layers;
 - Battle Royale friendly-fire prevention and body separation;
 - lifetime hit/cross/kill/K:D accounting;
-- **RC1 12-brain → RC2 16-brain save migration**, preserving original genomes;
+- RC1/RC2 → RC3 save migration and clean species-state restoration;
 - 4/10/20/64-neuron initialization fairness at the actual firing threshold;
-- a six-generation/twelve-trial deterministic stress playtest;
+- a three-generation/twelve-trial deterministic RC3 stress playtest;
 - Chromium desktop rendering;
-- interactive WebKit mobile/landscape behaviour, persistence and pause-overlay state.
+- interactive WebKit mobile/landscape behaviour, manual saving, scenario selection after reload, persistence and pause-overlay state.
 
 Core Node audits can be run locally with:
 
@@ -246,4 +253,4 @@ The WebKit test additionally requires Playwright and is intended primarily for C
 
 ## Current version
 
-**v1.0.0-rc.2** — stress-test release candidate: permanent PAUSED-overlay fix, 16 creatures per species, two-trial genotype evaluation and in-place migration of RC1 experiments.
+**v1.0.0-rc.3** — persistent species-state saves, simple Continue/Reset recovery flow, four-trial genotype evaluation and 60-second Battle Royale rounds.

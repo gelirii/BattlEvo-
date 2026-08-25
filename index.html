@@ -21,7 +21,7 @@
     <div class="speciesCard redCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label for="brain-red">Hidden neurons · 1–64</label><input id="brain-red" type="number" inputmode="numeric" min="1" max="64" step="1" value="4"></div>
     <div class="speciesCard greenCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label for="brain-green">Hidden neurons · 1–64</label><input id="brain-green" type="number" inputmode="numeric" min="1" max="64" step="1" value="10"></div>
     <div class="speciesCard blueCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label for="brain-blue">Hidden neurons · 1–64</label><input id="brain-blue" type="number" inputmode="numeric" min="1" max="64" step="1" value="20"></div>
-    <div id="brain-help-text" class="brief helpText" hidden>Hidden neurons are brain capacity, not a difficulty setting. More neurons create more connections for evolution to explore, but a bigger brain is not automatically better. RC2 evaluates every genotype across two different trials before breeding.</div>
+    <div id="brain-help-text" class="brief helpText" hidden>Hidden neurons are brain capacity, not a difficulty setting. More neurons create more connections for evolution to explore, but a bigger brain is not automatically better. RC3 evaluates every genotype across four different trials before breeding.</div>
 
     <div class="scenarioPicker">
       <div class="sectionLabel">Scenario</div>
@@ -34,11 +34,11 @@
       <div id="mode-brief" class="brief"></div>
     </div>
 
-    <button id="continue" class="secondary saveButton" hidden>CONTINUE SAVED EXPERIMENT</button>
+    <button id="continue" class="secondary saveButton" hidden>CONTINUE SAVED EVOLUTION</button>
     <button id="start" class="primary">START NEW EVOLUTION</button>
-    <div class="buttonRow"><button data-pause disabled>Pause</button><button id="reset" disabled>Reset evolution</button></div>
+    <div class="buttonRow"><button data-pause disabled>Pause</button><button data-save disabled>Save</button><button id="reset" disabled>Reset evolution</button></div>
     <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div><div id="speed-status" class="tiny speedStatus">1× target</div></div>
-    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles; once seen, a bunker stays in that creature's remembered map. RC2 runs 16 creatures per species and two trials per generation. Scenario changes start after the current generation. Autosave preserves completed trials, brains and career records.</div>
+    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles; once seen, a bunker stays in that creature's remembered map. RC3 runs 16 creatures per species and four trials per generation. Save pauses the game and stores the current generation, evolved brains and career records; continuing starts Trial 1 on a fresh arena in whichever scenario you choose.</div>
     <div class="mobileHint">On iPhone the running view crops the decorative side gutters so the square battlefield uses the full screen width. Page scrolling and pinch-zoom remain enabled.</div>
   </aside>
 
@@ -49,7 +49,7 @@
       <div class="hudBox"><span>Population</span><strong id="hud-pop">16 × 3</strong></div>
       <div class="hudBox"><span>Sim time</span><strong id="hud-time">0.0s</strong></div>
     </div>
-    <div class="mobileRunBar" aria-label="Running controls"><button data-pause disabled>Pause</button><div class="mobileSpeed"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
+    <div class="mobileRunBar" aria-label="Running controls"><button data-pause disabled>Pause</button><button data-save disabled>Save</button><div class="mobileSpeed"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div></div>
     <div class="canvasViewport">
       <canvas id="game" width="960" height="600" aria-label="BattlEvo simulation arena"></canvas>
       <div id="pause-overlay" class="pauseOverlay" hidden>PAUSED</div>

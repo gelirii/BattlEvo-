@@ -1,7 +1,7 @@
 'use strict';
 
-const SAVE_SCHEMA=2,SAVE_DB='BattlEvo',SAVE_STORE='experiments',SAVE_KEY='current';
-let savedExperimentAvailable=false,persistenceWarning='';
+const SAVE_SCHEMA=3,SAVE_DB='BattlEvo',SAVE_STORE='experiments',SAVE_KEY='current';
+let savedExperimentAvailable=false,persistenceWarning='',savedExperimentSnapshot=null;
 
 function openSaveDb(){
   return new Promise((resolve,reject)=>{
@@ -12,11 +12,18 @@ function openSaveDb(){
   });
 }
 function idbRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:new Float32Array(g.brain.g),fitness:Number(g.fitness)||0,best:Number(g.best)||0}));}
+function serializePopulation(pop){return pop.map(g=>({hidden:g.brain.hidden,genome:new Float32Array(g.brain.g),best:Number(g.best)||0}));}
 function makeSaveSnapshot(){
   if(!sim)return null;
+  // Species-state saves deliberately discard the current trial's partial evaluation.
+  // The genomes and generation are preserved; continuing always starts Trial 1 on a fresh arena.
   const lifetime=cloneLifetimeStats(sim.roundLifetimeBaseline||sim.lifetime);
-  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),mode:sim.mode,generation:sim.generation,trial:sim.trial,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
+  return{schema:SAVE_SCHEMA,gameVersion:GAME_VERSION,savedAt:Date.now(),generation:sim.generation,lifetime,lifetimeRounds:copyJson(sim.lifetimeRounds),populations:Object.fromEntries(SPECIES.map(s=>[s.id,serializePopulation(sim.populations[s.id])]))};
+}
+function savedBrainSizes(snapshot){return Object.fromEntries(SPECIES.map(s=>[s.id,Number(snapshot?.populations?.[s.id]?.[0]?.hidden)||null]));}
+function syncBrainInputsFromSnapshot(snapshot){
+  const sizes=savedBrainSizes(snapshot);
+  for(const s of SPECIES){const el=document.getElementById('brain-'+s.id);if(el&&sizes[s.id])el.value=String(clamp(Math.round(sizes[s.id]),MIN_HIDDEN,MAX_HIDDEN));}
 }
 function syncBrainInputsFromSimulation(){
   if(!sim)return;
@@ -24,30 +31,51 @@ function syncBrainInputsFromSimulation(){
 }
 async function saveExperiment(){
   if(!sim)return false;
-  try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');tx.objectStore(SAVE_STORE).put(makeSaveSnapshot(),SAVE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});db.close();savedExperimentAvailable=true;persistenceWarning='';if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(true);return true;}
-  catch(err){persistenceWarning='Automatic saving is unavailable in this browser session.';if(typeof showNotice==='function')showNotice(persistenceWarning,'warning');return false;}
+  const snapshot=makeSaveSnapshot();
+  try{
+    const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');
+    tx.objectStore(SAVE_STORE).put(snapshot,SAVE_KEY);
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+    db.close();savedExperimentAvailable=true;savedExperimentSnapshot=snapshot;persistenceWarning='';
+    if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(true,snapshot);
+    return true;
+  }
+  catch(err){persistenceWarning='Saving is unavailable in this browser session.';if(typeof showNotice==='function')showNotice(persistenceWarning,'warning');return false;}
 }
-async function loadExperimentSnapshot(){try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readonly'),value=await idbRequest(tx.objectStore(SAVE_STORE).get(SAVE_KEY));db.close();return value||null;}catch(err){persistenceWarning='Saved experiments are unavailable in this browser session.';return null;}}
-async function clearSavedExperiment(){try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');tx.objectStore(SAVE_STORE).delete(SAVE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();savedExperimentAvailable=false;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(false);return true;}catch(err){return false;}}
-async function continueSavedExperiment(){
+async function loadExperimentSnapshot(){
+  try{const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readonly'),value=await idbRequest(tx.objectStore(SAVE_STORE).get(SAVE_KEY));db.close();return value||null;}
+  catch(err){persistenceWarning='Saved evolution is unavailable in this browser session.';return null;}
+}
+async function clearSavedExperiment(){
+  try{
+    const db=await openSaveDb(),tx=db.transaction(SAVE_STORE,'readwrite');tx.objectStore(SAVE_STORE).delete(SAVE_KEY);
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();
+    savedExperimentAvailable=false;savedExperimentSnapshot=null;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(false,null);return true;
+  }catch(err){return false;}
+}
+async function continueSavedExperiment(mode=selectedMode){
   const snapshot=await loadExperimentSnapshot();if(!snapshot)return false;
   try{
     const oldSize=snapshot.populations?.red?.length||0;
-    restoreSimulation(snapshot);syncBrainInputsFromSimulation();paused=true;
+    restoreSimulation(snapshot,mode);syncBrainInputsFromSimulation();paused=true;savedExperimentSnapshot=snapshot;
     if(typeof syncModeButtons==='function')syncModeButtons();if(typeof updatePauseUI==='function')updatePauseUI();if(typeof updateHud==='function')updateHud();
     const migrated=oldSize&&oldSize<POP_SIZE?` Population expanded ${oldSize}→${POP_SIZE}; original evolved brains were preserved and new descendants added.`:'';
-    if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation}, trial ${sim.trial}/${TRIALS_PER_GENERATION}. The current trial restarts from its checkpoint.${migrated}`,'info');
+    if(typeof showNotice==='function')showNotice(`Restored generation ${sim.generation} into ${MODE_NAMES[sim.mode]}. Trial 1/${TRIALS_PER_GENERATION} starts on a fresh arena.${migrated}`,'info');
     return true;
   }
-  catch(err){if(typeof showNotice==='function')showNotice('The saved experiment could not be restored.','error');return false;}
+  catch(err){if(typeof showNotice==='function')showNotice('The saved evolution could not be restored.','error');return false;}
 }
-async function detectSavedExperiment(){const snapshot=await loadExperimentSnapshot();savedExperimentAvailable=!!snapshot;if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(savedExperimentAvailable);}
+async function detectSavedExperiment(){
+  const snapshot=await loadExperimentSnapshot();savedExperimentAvailable=!!snapshot;savedExperimentSnapshot=snapshot||null;
+  if(snapshot)syncBrainInputsFromSnapshot(snapshot);
+  if(typeof setSavedExperimentUI==='function')setSavedExperimentUI(savedExperimentAvailable,snapshot);
+}
 
 async function handleVisibility(hidden){
   if(hidden){if(sim){sim.wasRunningBeforeHide=!paused;paused=true;if(typeof updatePauseUI==='function')updatePauseUI();await saveExperiment();}}
   else{if(typeof resetFrameTiming==='function')resetFrameTiming();if(sim&&sim.wasRunningBeforeHide){sim.wasRunningBeforeHide=false;if(typeof showNotice==='function')showNotice('BattlEvo paused while it was in the background. Resume when ready.','info');}}
 }
-if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>handleVisibility(document.hidden));
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>handleVisibility(document.hidden));
 if(typeof window!=='undefined'){
   window.addEventListener('pagehide',()=>{if(sim)saveExperiment();});
   window.addEventListener('pageshow',()=>{if(typeof resetFrameTiming==='function')resetFrameTiming();});
