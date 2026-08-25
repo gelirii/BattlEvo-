@@ -4,7 +4,7 @@ BattlEvo is a dependency-free browser neural-evolution arcade. Three independent
 
 The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step or runtime library dependency.
 
-## v1.0.0 RC5 rules
+## v1.0.0 RC6 rules
 
 - **Hidden neurons:** 1–64 per species.
 - **Network:** **599 inputs → one user-sized hidden layer → 18 outputs**.
@@ -12,28 +12,29 @@ The runtime is plain HTML/CSS/JavaScript and Canvas. There is no build step or r
 - **Evaluation:** four independently randomised trials per genetic generation; fitness is averaged before breeding.
 - **Creature / target / Invader speed:** 1.65 px/tick ≈ 99 px/s at 60 simulation ticks/s.
 - **Projectile speed:** 4.6 px/tick ≈ 276 px/s, or 2.788× creature speed.
-- **Facing and movement are independent.** Facing is aiming, not vision.
+- **Movement:** eight compass directions plus still.
+- **Aiming:** continuous through the full 360° and independent of movement.
 - **Perception is 360° tactical screen-state**, not a forward field of view.
-- **Bunkers are always known static geometry** and block both projectiles and sight to dynamic objects.
+- **Bunkers are always known static geometry**, physically block projectiles, and set the clear-line-of-sight state of dynamic objects without erasing their known locations.
 - Species never interbreed.
 
 A genetic generation contains four real game rounds. Lifetime scoreboards count every completed round, while natural selection waits until all four trials are complete.
 
 ## Tactical perception
 
-RC5 deliberately replaces the old 77-input, 180° sector vision and remembered-bunker model. The network is now treated like a player looking down at the game screen rather than an animal living inside the arena.
+RC5 replaced the old 77-input, 180° sector vision and remembered-bunker model with a structured screen-state. RC6 keeps that 599-input layout but changes occlusion to behave more like a player who can see the whole game state while still understanding cover.
 
-Every creature always receives its own absolute, normalised arena coordinates and all bunker geometry. Dynamic objects are supplied by semantic role and disappear only when a bunker blocks the straight line between the creature and that object. Turning around does not reveal anything; facing only controls the gun.
+Every creature always receives its own absolute, normalised arena coordinates and all bunker geometry. Scenario-relevant dynamic objects retain their absolute location, motion and other attributes even when a bunker sits between the creature and that object. The first state value in each populated actor/projectile slot is the current clear-line-of-sight state: **1 = visible / clear shot, 0 = occluded by cover**. Irrelevant species/projectiles remain absent entirely.
 
 The fixed tactical tables are:
 
 - 6 bunker slots — all possible current bunkers;
 - 15 friendly-creature slots — every possible teammate;
 - 32 enemy-creature slots — every possible Battle Royale opponent;
-- 12 nearest visible friendly-projectile slots;
-- 24 nearest visible hostile-projectile slots.
+- 12 nearest relevant friendly-projectile slots;
+- 24 nearest relevant hostile-projectile slots.
 
-Actors are distance-sorted from the evaluating creature and include presence, absolute x/y, x/y motion, facing and health where applicable. Projectile slots include presence, absolute x/y and x/y velocity. Empty slots are zero.
+Actors are distance-sorted from the evaluating creature and include visibility, absolute x/y, x/y motion, aiming direction and health where applicable. Projectile slots include visibility, absolute x/y and x/y velocity. Empty slots are zero.
 
 Projectile tables are intentionally bounded. Actors and cover are complete, while representing every simultaneously existing bullet as a permanent fully-connected input would make the genome and mobile CPU cost grow without bound during projectile-heavy fights.
 
@@ -43,7 +44,7 @@ Projectile tables are intentionally bounded. Actors and cover are complete, whil
 
 - moving targets are enemies;
 - teammates and other species do not exist in perception;
-- only that individual creature's own projectiles are visible;
+- only that individual creature's own projectiles are represented;
 - all other creatures' projectiles are absent;
 - target species-status dots are not rendered.
 
@@ -70,6 +71,18 @@ Projectile tables are intentionally bounded. Actors and cover are complete, whil
 
 The intent is that **friend, enemy, friendly projectile and hostile projectile keep the same meaning in every scenario**, so practice modes do not teach contradictory colour semantics.
 
+## Continuous aiming
+
+The output layer remains 18-wide for RC5 save compatibility:
+
+- outputs 0–8 choose still / eight-way movement;
+- outputs 9–16 are eight directional **aim votes** around the compass;
+- output 17 is fire.
+
+RC5 treated the eight aim outputs as winner-take-all compass choices. RC6 converts all eight values into a weighted circular vector. A single dominant direction still aims exactly as before, while combinations can produce any intermediate angle — for example equal east and north-east preference produces a 22.5° shot. The creature's bright nose line and fired projectile use this exact continuous vector.
+
+Bunker collision remains physical. Knowing an enemy's coordinates behind cover does not allow a projectile to pass through the bunker; the visibility state exists so evolution can learn to wait, flank or reposition rather than simply firing into solid cover.
+
 ## Scenarios
 
 ### Target Practice
@@ -86,7 +99,7 @@ Arrow collisions have logical per-species hit state, so one colour cannot shield
 
 ### Invaders
 
-A randomly oriented Space-Invaders-style defence with three fresh bunkers. Agents move on one axis, face independently, shoot, dodge and use cover.
+A randomly oriented Space-Invaders-style defence with three fresh bunkers. Agents move on one axis, aim independently, shoot, dodge and use cover.
 
 Every Invader has independent Red/Green/Blue logical state. Survival, hostile fire and breach failure are species-specific, so one species cannot steal another species' training targets or alter its threat layer.
 
@@ -132,13 +145,13 @@ BattlEvo uses IndexedDB for one persistent current evolution.
 
 Pressing **Save** pauses and stores the species state: every Red/Green/Blue genome, hidden-neuron width, generation and completed career records. It does not save the current arena, creature positions or bullets. Reloading lets the player choose any scenario and continue the saved generation from Trial 1/4 on a fresh arena.
 
-**RC5 is intentionally not compatible with RC4 and older saved brains.** The old genomes were evolved against 77 completely different input meanings; pretending those first-layer weights map onto the new 599-input tactical screen would create meaningless brains. RC5 therefore rejects/clears the retired save format and starts a new evolutionary experiment. RC5 saves are self-validated by schema, input count and genome length before restoration.
+**RC5 and RC6 share the same 599-input / 18-output genome shape and save schema**, so RC5 species can continue into RC6. The meaning of visible objects and single-direction aim preferences remains compatible; RC6 simply supplies coordinates for occluded relevant objects and permits blended aim directions.
 
-Reset Evolution is the deliberate action that erases the current RC5 save, career records and generation and returns to Gen 0 with editable hidden-neuron counts.
+RC4 and older 77-input brains remain intentionally incompatible with the tactical-screen system. Reset Evolution deliberately erases the current save, career records and generation and returns to Gen 0 with editable hidden-neuron counts.
 
 ## Neural fairness
 
-The initialisation audit feeds identical random input probes into 4N, 10N, 20N and 64N RC5 brains.
+The initialisation audit feeds identical random input probes into 4N, 10N, 20N and 64N tactical brains.
 
 Current output RMS:
 
@@ -158,18 +171,18 @@ Initial firing probability at the game's real `> 0.15` threshold:
 
 The larger 599-input first layer therefore still begins with comparable output scale across brain widths.
 
-## RC5 stress telemetry
+## RC5/RC6 stress telemetry
 
 The deterministic 4N / 10N / 20N headless playtest completed three generations / twelve trials in every mode with finite state throughout.
 
-Raw simulation throughput on the CI CPU was approximately:
+Raw RC5 simulation throughput on the CI CPU was approximately:
 
 - Target Practice: **1,355 ticks/s ≈ 22.6× real-time**;
 - Battlefield Run: **2,041 ticks/s ≈ 34.0×**;
 - Invaders: **1,077 ticks/s ≈ 18.0×**;
 - Battle Royale: **1,900 ticks/s ≈ 31.7×**.
 
-The deliberately worst-case **64N / 64N / 64N Battle Royale** sample managed about **292 ticks/s ≈ 4.9× real-time** before browser rendering. A 64N RC5 brain has a much larger first layer than the retired 77-input brain, so extreme configurations are expected to be CPU-limited. The UI reports requested versus achieved simulation speed rather than pretending 30× was reached.
+The deliberately worst-case **64N / 64N / 64N Battle Royale** sample managed about **292 ticks/s ≈ 4.9× real-time** before browser rendering. RC6 keeps the same network dimensions, so the dominant MLP cost is unchanged; additional line-of-sight flags are checked within the existing tactical table build. The UI reports requested versus achieved simulation speed rather than pretending 30× was reached.
 
 ## Performance
 
@@ -193,7 +206,7 @@ A Web Worker migration remains deferred until real iPhone/X220 testing shows mai
 - running mode has sticky Pause / Save / speed controls;
 - backgrounding explicitly pauses instead of attempting hidden-tab catch-up.
 
-CI includes an interactive Playwright WebKit test covering start, invalid neuron correction, four-trial rollover, Save/reload/Continue, scenario choice after reload, pause overlay, background state, portrait/landscape layout and RC5's 599-input tactical brain.
+CI includes an interactive Playwright WebKit test covering start, invalid neuron correction, four-trial rollover, Save/reload/Continue, scenario choice after reload, pause overlay, background state, portrait/landscape layout and RC6's continuous aim calculation.
 
 ## Automated release audit
 
@@ -203,8 +216,11 @@ GitHub Actions checks:
 - exact production script order;
 - all four scenario loops and four-trial generation rollover;
 - 60-second Battle Royale cap;
-- 360° perception independent of facing;
-- bunker occlusion of dynamic objects;
+- 360° tactical awareness independent of aiming direction;
+- occluded objects retaining coordinates with visibility = 0;
+- visibility returning to 1 when cover is removed;
+- physical bunker blocking of shots toward known hidden targets;
+- continuous non-compass projectile aiming;
 - static bunker knowledge;
 - exact scenario friend/enemy/projectile filtering;
 - absence of retired sector/memory vision functions and buffers;
@@ -216,7 +232,7 @@ GitHub Actions checks:
 - independent Invader targets/fire/breach layers;
 - Royale friendly-fire prevention and body separation;
 - lifetime accounting;
-- RC5 save compatibility and rejection of old 77-input genomes;
+- tactical save compatibility and rejection of old 77-input genomes;
 - 4/10/20/64-neuron initialisation fairness;
 - twelve-trial deterministic stress playtest;
 - Chromium rendering and interactive WebKit mobile behaviour.
@@ -235,4 +251,4 @@ GitHub Pages publishes directly from `main` / root; `.nojekyll` keeps the site s
 
 ## Current version
 
-**v1.0.0-rc.5 — structured 360° tactical perception with scenario-consistent semantic roles.**
+**v1.0.0-rc.6 — known occluded coordinates, explicit visibility state and continuous 360° aiming.**
