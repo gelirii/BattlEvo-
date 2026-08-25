@@ -44,7 +44,11 @@ function drawTargets(){
   }
 }
 function drawInvaders(){for(const n of sim.invaders){if(!n.alive)continue;ctx.fillStyle='#b783ff';ctx.fillRect(n.x-7,n.y-6,14,12);ctx.fillRect(n.x-10,n.y+5,5,4);ctx.fillRect(n.x+5,n.y+5,5,4);const lamps=[['red','#ff4a4a',-6],['green','#45e06f',0],['blue','#4f8cff',6]];for(const[id,c,ox]of lamps){ctx.globalAlpha=n.aliveFor?.[id]?.valueOf()?.85:.16;ctx.fillStyle=c;ctx.beginPath();ctx.arc(n.x+ox,n.y-10,1.8,0,TAU);ctx.fill();}ctx.globalAlpha=1;}}
-function draw(){drawBackground();if(!sim){ctx.fillStyle='#718098';ctx.font='22px system-ui';ctx.textAlign='center';ctx.fillText('Choose brain sizes and a scenario, then start evolution.',FIELD.cx,FIELD.cy);return;}drawArenaGuides();drawOrientation();drawBunkers();if(sim.mode==='target')drawTargets();if(sim.mode==='invaders')drawInvaders();for(const p of sim.arrows)drawProjectile(p,'#f3d19b',true);for(const p of sim.projectiles)drawProjectile(p,p.owner?p.owner.species.pale:(p.team==='invader'?'#c58cff':'#ffd65a'),false);for(const a of sim.agents)drawAgent(a);}
+function draw(){
+  drawBackground();
+  if(!sim){ctx.fillStyle='#718098';ctx.font='22px system-ui';ctx.textAlign='center';const hasSave=typeof savedExperimentAvailable!=='undefined'&&savedExperimentAvailable;ctx.fillText(hasSave?'Saved species ready — choose a scenario, then Continue.':'Choose brain sizes and a scenario, then start evolution.',FIELD.cx,FIELD.cy);return;}
+  drawArenaGuides();drawOrientation();drawBunkers();if(sim.mode==='target')drawTargets();if(sim.mode==='invaders')drawInvaders();for(const p of sim.arrows)drawProjectile(p,'#f3d19b',true);for(const p of sim.projectiles)drawProjectile(p,p.owner?p.owner.species.pale:(p.team==='invader'?'#c58cff':'#ffd65a'),false);for(const a of sim.agents)drawAgent(a);
+}
 
 function showNotice(message,type='info'){const el=document.getElementById('notice');if(!el)return;clearTimeout(noticeTimer);el.textContent=message;el.className='notice '+type;el.hidden=false;noticeTimer=setTimeout(()=>{el.hidden=true;},6500);}
 function updateModeBrief(){const mode=sim?.mode||selectedMode,el=document.getElementById('mode-brief');if(el)el.textContent=MODE_CONFIG[mode].brief;}
@@ -67,13 +71,23 @@ function updateStats(){
     document.getElementById('stat-'+s.id).textContent=line;
   }updateLifetimeBoard();
 }
-function setSavedExperimentUI(hasSave){savedExperimentAvailable=!!hasSave;const el=document.getElementById('continue');if(el)el.hidden=!hasSave||!!sim;}
-function setRunningUI(on){document.body.classList.toggle('running',on);document.getElementById('start').disabled=on;document.getElementById('reset').disabled=!on;for(const b of document.querySelectorAll('[data-pause]'))b.disabled=!on;for(const id of ['brain-red','brain-green','brain-blue'])document.getElementById(id).disabled=on;setSavedExperimentUI(savedExperimentAvailable);updatePauseUI();}
+function setSavedExperimentUI(hasSave,snapshot=savedExperimentSnapshot){
+  savedExperimentAvailable=!!hasSave;if(snapshot)savedExperimentSnapshot=snapshot;
+  const waiting=savedExperimentAvailable&&!sim,cont=document.getElementById('continue'),start=document.getElementById('start'),reset=document.getElementById('reset');
+  if(cont){cont.hidden=!waiting;cont.textContent=waiting&&snapshot?.generation?`CONTINUE GEN ${snapshot.generation}`:'CONTINUE SAVED EVOLUTION';}
+  if(start){start.hidden=waiting;start.disabled=!!sim||waiting;}
+  if(reset)reset.disabled=!sim&&!savedExperimentAvailable;
+  for(const id of ['brain-red','brain-green','brain-blue']){const el=document.getElementById(id);if(el)el.disabled=!!sim||waiting;}
+  for(const b of document.querySelectorAll('[data-save]'))b.disabled=!sim;
+  if(waiting&&typeof draw==='function')draw();
+}
+function setRunningUI(on){document.body.classList.toggle('running',on);for(const b of document.querySelectorAll('[data-pause]'))b.disabled=!on;for(const b of document.querySelectorAll('[data-save]'))b.disabled=!on;setSavedExperimentUI(savedExperimentAvailable,savedExperimentSnapshot);updatePauseUI();}
 function updatePauseUI(){for(const b of document.querySelectorAll('[data-pause]'))b.textContent=paused?'Resume':'Pause';const overlay=document.getElementById('pause-overlay');if(overlay)overlay.hidden=!sim||!paused;}
 function syncSpeedButtons(){document.querySelectorAll('[data-speed]').forEach(b=>b.classList.toggle('active',Number(b.dataset.speed)===speed));}
 function resetFrameTiming(){last=performance.now();tickAccumulator=0;perfWindowStart=last;perfTicks=0;actualSpeed=0;}
 function updateSpeedStatus(){const el=document.getElementById('speed-status');if(!el)return;if(paused){el.textContent=`${speed}× target · paused`;return;}if(speed<=1){el.textContent=`${actualSpeed?actualSpeed.toFixed(1):'1.0'}× actual`;return;}const limited=actualSpeed>0&&actualSpeed<speed*.8;el.textContent=`${speed}× target · ${actualSpeed?actualSpeed.toFixed(1):'—'}× actual${limited?' · CPU limited':''}`;}
 function normaliseBrainInputs(){const defaults={red:4,green:10,blue:20};let corrected=false;for(const s of SPECIES){const el=document.getElementById('brain-'+s.id),raw=Number(el.value);let n=Number.isFinite(raw)?Math.round(raw):defaults[s.id];n=clamp(n,MIN_HIDDEN,MAX_HIDDEN);if(String(n)!==String(el.value).trim())corrected=true;el.value=String(n);}return corrected;}
+function setSaveButtonText(text){for(const b of document.querySelectorAll('[data-save]'))b.textContent=text;}
 
 function loop(now){
   const dt=Math.min(100,Math.max(0,now-last));last=now;
@@ -91,22 +105,29 @@ requestAnimationFrame(loop);
 
 document.querySelectorAll('#modes button').forEach(b=>b.addEventListener('click',()=>{
   const mode=b.dataset.mode;
-  if(!sim){selectedMode=mode;syncModeButtons();updateHud();return;}
+  if(!sim){selectedMode=mode;syncModeButtons();updateHud();draw();return;}
   if(mode===sim.mode){if(sim.pendingMode){sim.pendingMode=null;showNotice('Queued scenario change cancelled.','info');syncModeButtons();}return;}
-  sim.pendingMode=mode;showNotice(`${MODE_NAMES[mode]} queued for the next generation. Both evaluation trials of generation ${sim.generation} will finish first.`,'info');syncModeButtons();
+  sim.pendingMode=mode;showNotice(`${MODE_NAMES[mode]} queued for the next generation. All ${TRIALS_PER_GENERATION} evaluation trials of generation ${sim.generation} will finish first.`,'info');syncModeButtons();
 }));
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{speed=Number(b.dataset.speed);tickAccumulator=0;syncSpeedButtons();updateSpeedStatus();}));
 document.querySelectorAll('[data-pause]').forEach(b=>b.addEventListener('click',()=>{if(!sim)return;paused=!paused;tickAccumulator=0;updatePauseUI();updateSpeedStatus();if(paused&&typeof saveExperiment==='function')saveExperiment();}));
+document.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',async()=>{
+  if(!sim)return;
+  paused=true;tickAccumulator=0;updatePauseUI();updateSpeedStatus();setSaveButtonText('Saving…');
+  const ok=typeof saveExperiment==='function'&&await saveExperiment();
+  if(ok){setSaveButtonText('Saved ✓');showNotice(`Saved generation ${sim.generation}. On reload, choose any scenario and continue from Trial 1/${TRIALS_PER_GENERATION}.`,'info');setTimeout(()=>setSaveButtonText('Save'),1400);}
+  else setSaveButtonText('Save');
+}));
 document.getElementById('brain-help').addEventListener('click',()=>{const el=document.getElementById('brain-help-text');el.hidden=!el.hidden;});
-document.getElementById('continue').addEventListener('click',async()=>{if(await continueSavedExperiment()){setRunningUI(true);updateHud();updateStats();}});
+document.getElementById('continue').addEventListener('click',async()=>{if(await continueSavedExperiment(selectedMode)){setRunningUI(true);updateHud();updateStats();draw();}});
 document.getElementById('start').addEventListener('click',async()=>{
+  if(savedExperimentAvailable){showNotice('Reset the saved evolution before starting again from Gen 0.','warning');return;}
   const corrected=normaliseBrainInputs();if(corrected)showNotice('Brain sizes were corrected to whole numbers in the allowed 1–64 range.','warning');
-  if(savedExperimentAvailable&&typeof window!=='undefined'&&typeof window.confirm==='function'&&!window.confirm('Start a new evolution and replace the saved experiment?'))return;
-  if(savedExperimentAvailable)await clearSavedExperiment();paused=false;resetFrameTiming();initSimulation();updatePauseUI();updateHud();
+  paused=false;resetFrameTiming();initSimulation();updatePauseUI();updateHud();
 });
 document.getElementById('reset').addEventListener('click',async()=>{
-  if(typeof window!=='undefined'&&typeof window.confirm==='function'&&!window.confirm('Reset all evolved Red, Green and Blue brains, autosave and lifetime records? This cannot be undone.'))return;
-  await clearSavedExperiment();sim=null;paused=false;resetFrameTiming();setRunningUI(false);document.getElementById('hud-gen').textContent='0';document.getElementById('hud-time').textContent='0.0s';document.getElementById('round-result').textContent='No completed rounds yet.';document.getElementById('mode-rounds').textContent='0 rounds';for(const s of SPECIES)document.getElementById('stat-'+s.id).textContent='Waiting to evolve.';updateLifetimeBoard();draw();
+  if(typeof window!=='undefined'&&typeof window.confirm==='function'&&!window.confirm('Reset all evolved Red, Green and Blue brains, saved progress and lifetime records? This returns BattlEvo to Gen 0 and cannot be undone.'))return;
+  await clearSavedExperiment();sim=null;paused=false;resetFrameTiming();setRunningUI(false);document.getElementById('hud-gen').textContent='0';document.getElementById('hud-time').textContent='0.0s';document.getElementById('round-result').textContent='No completed rounds yet.';document.getElementById('mode-rounds').textContent='0 rounds';for(const s of SPECIES)document.getElementById('stat-'+s.id).textContent='Waiting to evolve.';updateLifetimeBoard();updateHud();draw();
 });
 
 syncSpeedButtons();updateHud();draw();
