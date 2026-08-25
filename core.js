@@ -1,7 +1,7 @@
 'use strict';
 
-// BattlEvo v1.0.0 RC4 — random-cover release candidate.
-const GAME_VERSION='v1.0.0-rc.4';
+// BattlEvo v1.0.0 RC5 — tactical-screen perception release candidate.
+const GAME_VERSION='v1.0.0-rc.5';
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
@@ -20,15 +20,24 @@ const PROJECTILE_SPEED=4.6;
 const AGENT_R=7;
 const FIELD_SIZE=H;
 const FIELD={left:(W-FIELD_SIZE)/2,right:(W+FIELD_SIZE)/2,top:0,bottom:H,size:FIELD_SIZE,cx:W/2,cy:H/2};
-const SIGHT_RANGE=Math.hypot(FIELD_SIZE,FIELD_SIZE)+1;
-const INPUTS=77;
+
+// Structured top-down tactical view. Static cover and actor tables are complete;
+// projectile tables prioritise the closest currently visible shots to bound MLP size.
+const TACTICAL_SLOTS={bunkers:6,friends:15,enemies:32,friendlyProjectiles:12,enemyProjectiles:24};
+const SELF_INPUTS=13,ACTOR_INPUTS=8,PROJECTILE_INPUTS=5,BUNKER_INPUTS=5;
+const INPUTS=SELF_INPUTS
+  +TACTICAL_SLOTS.bunkers*BUNKER_INPUTS
+  +TACTICAL_SLOTS.friends*ACTOR_INPUTS
+  +TACTICAL_SLOTS.enemies*ACTOR_INPUTS
+  +TACTICAL_SLOTS.friendlyProjectiles*PROJECTILE_INPUTS
+  +TACTICAL_SLOTS.enemyProjectiles*PROJECTILE_INPUTS;
 const OUTPUTS=18;
 const MAX_TICKS={target:1800,battlefield:1500,invaders:1800,royale:3600};
 const MODE_CONFIG={
-  target:{name:'Target Practice',icon:'◎',brief:'Random positions, random cover and moving targets. Learn to find, track, switch and lead worthwhile targets in any direction.'},
-  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield with fresh random cover while arrows travel at 90° to the route. Survive, remember cover and learn when not to move.'},
-  invaders:{name:'Invaders',icon:'▦',brief:'Defend the marked edge with fresh random cover. Move on one axis, face freely, clear your own logical wave and dodge return fire.'},
-  royale:{name:'Battle Royale',icon:'✦',brief:'Red, Green and Blue fight as teams with fresh symmetric random cover. Friends are friendly; damage, kills, survival and team victory drive evolution. A round may run for up to 60 seconds.'}
+  target:{name:'Target Practice',icon:'◎',brief:'Targets are the only enemies. Each creature sees its own shots, ignores every creature colour, and uses a 360° tactical view with bunker occlusion.'},
+  battlefield:{name:'Battlefield Run',icon:'➜',brief:'Cross a rotated battlefield with fresh random cover. Teammates are visible; other species are absent; battlefield arrows are hostile projectiles.'},
+  invaders:{name:'Invaders',icon:'▦',brief:'Invaders are enemies, teammates are friends, and each species sees only its own friendly fire plus the Invader fire aimed at it.'},
+  royale:{name:'Battle Royale',icon:'✦',brief:'Teammates and their shots are friendly; both other colours and their shots are enemies. Bunkers occlude dynamic objects, never static map knowledge.'}
 };
 const MODE_NAMES=Object.fromEntries(Object.entries(MODE_CONFIG).map(([k,v])=>[k,v.name]));
 const SHOT_COST={target:0.5,battlefield:0,invaders:0.12,royale:0.1};
@@ -43,8 +52,6 @@ function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 function rand(a=1,b=0){return b+Math.random()*(a-b);}
 function randi(n){return Math.floor(Math.random()*n);}
 function dist2(a,b){const dx=a.x-b.x,dy=a.y-b.y;return dx*dx+dy*dy;}
-function normAngle(a){while(a<=-Math.PI)a+=TAU;while(a>Math.PI)a-=TAU;return a;}
-function dot(ax,ay,bx,by){return ax*bx+ay*by;}
 function gaussian(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);}
 function circleHit(a,b,ra,rb){return dist2(a,b)<=(ra+rb)*(ra+rb);}
 function rectCircleHit(r,c,cr){const px=clamp(c.x,r.x,r.x+r.w),py=clamp(c.y,r.y,r.y+r.h),dx=c.x-px,dy=c.y-py;return dx*dx+dy*dy<=cr*cr;}
@@ -65,6 +72,7 @@ class Brain{
   constructor(hidden,genome=null){
     this.hidden=hidden;
     const count=genomeLayout(hidden).count;
+    if(genome&&genome.length!==count)throw new Error(`Genome/input mismatch: expected ${count} genes, got ${genome.length}.`);
     this.g=genome?Float32Array.from(genome):Float32Array.from({length:count},(_,i)=>randomGene(hidden,i));
     this.hiddenBuffer=new Float32Array(hidden);
     this.outputBuffer=new Float32Array(OUTPUTS);
@@ -114,8 +122,9 @@ class Agent{
   constructor(species,genotype,idx,x,y,facing=0){
     this.species=species;this.genotype=genotype;this.idx=idx;this.x=x;this.y=y;this.facing=facing;
     this.moveDir=-1;this.alive=true;this.health=1;this.cooldown=0;this.fitness=0;this.hits=0;this.kills=0;this.shots=0;
-    this.memory=new Map();this.finished=false;this.flash=0;this.lastX=x;this.lastY=y;this.deathTick=null;
-    this.inputBuffer=new Float32Array(INPUTS);this.sectorBuffer=new Float32Array(56);this.memoryBuffer=new Float32Array(8);
+    this.finished=false;this.flash=0;this.lastX=x;this.lastY=y;this.deathTick=null;
+    this.inputBuffer=new Float32Array(INPUTS);
+    this.tacticalView={friends:[],enemies:[],friendlyProjectiles:[],enemyProjectiles:[]};
   }
 }
 
@@ -179,7 +188,7 @@ function initSimulation(){
 }
 
 function restoreSimulation(snapshot,modeOverride=selectedMode){
-  if(!snapshot||![1,2,3].includes(snapshot.schema))throw new Error('Unsupported BattlEvo save data.');
+  if(!snapshot||snapshot.schema!==4)throw new Error('Unsupported BattlEvo save data.');
   const restoredMode=MODE_CONFIG[modeOverride]?modeOverride:(MODE_CONFIG[snapshot.mode]?snapshot.mode:'target');
   selectedMode=restoredMode;
   sim=createSimulation(restoredMode,Math.max(1,Number(snapshot.generation)||1));
