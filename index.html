@@ -38,7 +38,7 @@
     <button id="start" class="primary">START NEW EVOLUTION</button>
     <div class="buttonRow"><button data-pause disabled>Pause</button><button data-save disabled>Save</button><button id="reset" disabled>Reset evolution</button></div>
     <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div><div id="speed-status" class="tiny speedStatus">1× target</div></div>
-    <div class="tiny memoryNote">RC5 uses a 360° top-down tactical view rather than a forward vision cone. Every creature knows its own coordinates and all bunker geometry. Dynamic objects are exposed only when relevant to that scenario and not hidden behind cover: friends stay friends, enemies stay enemies, and irrelevant species/projectiles simply do not exist in that creature's input. RC5 runs 16 creatures per species and four trials per generation.</div>
+    <div class="tiny memoryNote">RC6 uses a 360° top-down tactical view. Every creature knows its own coordinates, all bunker geometry, and the coordinates of every scenario-relevant actor even when cover blocks the direct line of sight. Dynamic slots carry a clear-shot visibility state: visible objects are 1, occluded objects are 0, while their position and motion remain known. Irrelevant species/projectiles do not exist in that creature's input. Aiming is continuous through 360°; movement remains eight-way plus still. RC6 runs 16 creatures per species and four trials per generation.</div>
     <div class="mobileHint">On iPhone the running view crops the decorative side gutters so the square battlefield uses the full screen width. Page scrolling and pinch-zoom remain enabled.</div>
   </aside>
 
@@ -60,7 +60,7 @@
       <div class="statCard" id="card-green"><b><span class="dot green"></span> Green</b><div class="statLine" id="stat-green">Waiting to evolve.</div><div class="lifetimeStat"><span id="lifetime-label-green">TOTAL HITS</span><strong id="lifetime-value-green">0</strong></div></div>
       <div class="statCard" id="card-blue"><b><span class="dot blue"></span> Blue</b><div class="statLine" id="stat-blue">Waiting to evolve.</div><div class="lifetimeStat"><span id="lifetime-label-blue">TOTAL HITS</span><strong id="lifetime-value-blue">0</strong></div></div>
     </div>
-    <div class="legend">The bright nose line shows where a creature is aiming; movement is independent. Tactical perception is 360° but bunkers occlude dynamic objects. Coloured shots belong to species, pale arrows are battlefield fire, purple-core shots belong to Invaders, and tan blocks are bunkers. LEADER follows accumulated scenario performance.</div>
+    <div class="legend">The bright nose line shows the creature's exact continuous aim; movement is independent. Tactical awareness is 360°: bunkers set dynamic-object visibility to blocked without deleting known coordinates. Coloured shots belong to species, pale arrows are battlefield fire, purple-core shots belong to Invaders, and tan blocks are bunkers. LEADER follows accumulated scenario performance.</div>
   </main>
 </div>
 </div>
