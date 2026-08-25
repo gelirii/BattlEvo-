@@ -21,7 +21,7 @@
     <div class="speciesCard redCard"><div class="speciesHead"><span class="dot red"></span>RED</div><label for="brain-red">Hidden neurons · 1–64</label><input id="brain-red" type="number" inputmode="numeric" min="1" max="64" step="1" value="4"></div>
     <div class="speciesCard greenCard"><div class="speciesHead"><span class="dot green"></span>GREEN</div><label for="brain-green">Hidden neurons · 1–64</label><input id="brain-green" type="number" inputmode="numeric" min="1" max="64" step="1" value="10"></div>
     <div class="speciesCard blueCard"><div class="speciesHead"><span class="dot blue"></span>BLUE</div><label for="brain-blue">Hidden neurons · 1–64</label><input id="brain-blue" type="number" inputmode="numeric" min="1" max="64" step="1" value="20"></div>
-    <div id="brain-help-text" class="brief helpText" hidden>Hidden neurons are brain capacity, not a difficulty setting. More neurons create more connections for evolution to explore, but a bigger brain is not automatically better. RC3 evaluates every genotype across four different trials before breeding.</div>
+    <div id="brain-help-text" class="brief helpText" hidden>Hidden neurons are brain capacity, not a difficulty setting. More neurons create more connections for evolution to explore, but a bigger brain is not automatically better. Every genotype is evaluated across four different trials before breeding.</div>
 
     <div class="scenarioPicker">
       <div class="sectionLabel">Scenario</div>
@@ -38,7 +38,7 @@
     <button id="start" class="primary">START NEW EVOLUTION</button>
     <div class="buttonRow"><button data-pause disabled>Pause</button><button data-save disabled>Save</button><button id="reset" disabled>Reset evolution</button></div>
     <div class="speedControl"><div class="sectionLabel">Simulation speed</div><div class="speedRow"><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="12">12×</button><button data-speed="30">30×</button></div><div id="speed-status" class="tiny speedStatus">1× target</div></div>
-    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles; once seen, a bunker stays in that creature's remembered map. RC3 runs 16 creatures per species and four trials per generation. Save pauses the game and stores the current generation, evolved brains and career records; continuing starts Trial 1 on a fresh arena in whichever scenario you choose.</div>
+    <div class="tiny memoryNote">Direct sight covers the full 180° in front. Bunkers block sight and projectiles; once seen, a bunker stays in that creature's remembered map. RC4 runs 16 creatures per species and four trials per generation. Creatures and scenario actors are placed before fresh random cover, so nothing can begin trapped inside a bunker. Save pauses the game and stores the current generation, evolved brains and career records.</div>
     <div class="mobileHint">On iPhone the running view crops the decorative side gutters so the square battlefield uses the full screen width. Page scrolling and pinch-zoom remain enabled.</div>
   </aside>
 
