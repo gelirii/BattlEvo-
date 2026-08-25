@@ -6,7 +6,7 @@ const fakeCtx=new Proxy({}, {get(t,p){if(!(p in t))t[p]=()=>{};return t[p];},set
 global.document={getElementById:id=>elements[id]||{value:'',disabled:false,textContent:''}};global.performance={now:()=>0};global.setRunningUI=()=>{};global.updateHud=()=>{};global.updateRoundResult=()=>{};global.saveExperiment=()=>{};
 for(const file of ['core.js','lifetime-stats.js','target-practice.js','brain-world.js','modes.js'])vm.runInThisContext(fs.readFileSync(file,'utf8'),{filename:file});const ev=code=>vm.runInThisContext(code);
 ev("selectedMode='target';initSimulation();");
-assert.strictEqual(ev('sim.agents.length'),36);assert.strictEqual(ev('sim.targets.length'),6);assert.strictEqual(ev('sim.bunkers.length'),3);
+assert.strictEqual(ev('sim.agents.length'),48);assert.strictEqual(ev('sim.targets.length'),6);assert.strictEqual(ev('sim.bunkers.length'),3);
 const quadrants={agents:new Set(),targets:new Set()},signatures=new Set(),facings=new Set(),headings=new Set();let allAgentX=[],allAgentY=[],allTargetX=[],allTargetY=[];
 for(let gen=0;gen<16;gen++){
   if(gen)ev('sim.agents=[];sim.bunkers=[];sim.targets=[];setupTarget();');
@@ -17,4 +17,4 @@ for(let gen=0;gen<16;gen++){
 }
 assert.strictEqual(quadrants.agents.size,4);assert.strictEqual(quadrants.targets.size,4);assert.ok(signatures.size>=15);assert.strictEqual(facings.size,8);assert.strictEqual(headings.size,8);assert.ok(Math.max(...allAgentX)-Math.min(...allAgentX)>500);assert.ok(Math.max(...allAgentY)-Math.min(...allAgentY)>500);assert.ok(Math.max(...allTargetX)-Math.min(...allTargetX)>450);assert.ok(Math.max(...allTargetY)-Math.min(...allTargetY)>450);
 for(let i=0;i<600;i++)ev('sim.tick++;stepTargets();');assert.ok(ev('sim.targets.every(t=>inArenaPoint(t))'));
-console.log('Target Practice matched-randomization audit passed.');console.log(JSON.stringify({layouts:signatures.size,agentQuadrants:[...quadrants.agents],targetQuadrants:[...quadrants.targets],facings:facings.size,targetHeadings:headings.size},null,2));
+console.log('Target Practice 16-agent matched-randomization audit passed.');console.log(JSON.stringify({layouts:signatures.size,agentQuadrants:[...quadrants.agents],targetQuadrants:[...quadrants.targets],facings:facings.size,targetHeadings:headings.size},null,2));
